@@ -1,0 +1,669 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Vellum API",
+    "version": "v1.0.0",
+    "description": "This is the API documentation for Vellum",
+    "license": {
+      "name": "Copyright 2025 Vellum"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8001"
+    }
+  ],
+  "paths": {
+    "/api/v1/upload": {
+      "post": {
+        "summary": "Upload and transcode a video file",
+        "tags": [
+          "Upload"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "Video file to upload"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Video uploaded and transcoded successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ServerResponse"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "example": "success"
+                        },
+                        "message": {
+                          "example": "Video uploaded successfully"
+                        },
+                        "data": {
+                          "type": "null"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No file uploaded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ServerResponse"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "example": "error"
+                        },
+                        "message": {
+                          "example": "No file uploaded"
+                        },
+                        "data": {
+                          "type": "null"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ServerResponse"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "example": "error"
+                        },
+                        "message": {
+                          "example": "Failed to upload video"
+                        },
+                        "data": {
+                          "type": "object",
+                          "properties": {
+                            "packager": {
+                              "type": "string",
+                              "example": "ffmpeg"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/upload/videos": {
+      "get": {
+        "summary": "Get list of uploaded videos",
+        "tags": [
+          "Upload"
+        ],
+        "responses": {
+          "200": {
+            "description": "Videos retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ServerResponse"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "example": "success"
+                        },
+                        "message": {
+                          "example": "Videos retrieved successfully"
+                        },
+                        "data": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/VideoResponse"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ServerResponse"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "example": "error"
+                        },
+                        "message": {
+                          "example": "Failed to upload video"
+                        },
+                        "data": {
+                          "type": "object",
+                          "properties": {
+                            "packager": {
+                              "type": "string",
+                              "example": "ffmpeg"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/video/create": {
+      "post": {
+        "summary": "Create a video upload session",
+        "description": "Creates a TUS upload session and returns a presigned URL for direct frontend uploads",
+        "tags": [
+          "Video"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VideoUploadSessionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Upload session created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ServerResponse"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "example": "success"
+                        },
+                        "message": {
+                          "example": "Upload session created"
+                        },
+                        "data": {
+                          "$ref": "#/components/schemas/VideoUploadSessionResponse"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ServerResponse"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "example": "error"
+                        },
+                        "message": {
+                          "example": "Missing required fields"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/video/{uploadId}/status": {
+      "get": {
+        "summary": "Get video processing status",
+        "tags": [
+          "Video"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "uploadId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The video upload ID",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Video status retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ServerResponse"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "example": "success"
+                        },
+                        "data": {
+                          "$ref": "#/components/schemas/VideoStatus"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Video not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ServerResponse"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "example": "error"
+                        },
+                        "message": {
+                          "example": "Video not found"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/videos": {
+      "get": {
+        "summary": "List all videos",
+        "description": "Get a list of all uploaded and processed videos",
+        "tags": [
+          "Video"
+        ],
+        "responses": {
+          "200": {
+            "description": "Videos retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ServerResponse"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "example": "success"
+                        },
+                        "message": {
+                          "example": "Videos retrieved successfully"
+                        },
+                        "data": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/VideoStatus"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/callback": {
+      "post": {
+        "summary": "Webhook callback endpoint",
+        "description": "Receives webhook callbacks when video processing completes or fails",
+        "tags": [
+          "Webhook"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookCallbackRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Callback received successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ServerResponse"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "example": "success"
+                        },
+                        "message": {
+                          "example": "Webhook callback received"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid callback data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ServerResponse"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "example": "error"
+                        },
+                        "message": {
+                          "example": "Invalid callback data"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "VideoUploadRequest": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "description": "Video file to upload"
+          }
+        }
+      },
+      "VideoResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ServerResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "success",
+              "error"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object"
+              },
+              {
+                "type": "array"
+              }
+            ]
+          }
+        }
+      },
+      "VideoUploadSessionRequest": {
+        "type": "object",
+        "required": [
+          "filename",
+          "filesize"
+        ],
+        "properties": {
+          "filename": {
+            "type": "string",
+            "description": "Name of the video file",
+            "example": "video.mp4"
+          },
+          "filesize": {
+            "type": "number",
+            "description": "Size of the video file in bytes",
+            "example": 104857600
+          },
+          "packager": {
+            "type": "string",
+            "enum": [
+              "ffmpeg",
+              "shaka"
+            ],
+            "default": "ffmpeg",
+            "description": "Video processing packager to use"
+          },
+          "callbackUrl": {
+            "type": "string",
+            "description": "Optional webhook URL for processing completion notifications",
+            "example": "https://myapp.com/webhook"
+          }
+        }
+      },
+      "VideoUploadSessionResponse": {
+        "type": "object",
+        "properties": {
+          "uploadId": {
+            "type": "string",
+            "description": "Unique identifier for the upload session",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "uploadUrl": {
+            "type": "string",
+            "description": "TUS upload URL for client-side uploads",
+            "example": "http://localhost:8001/api/v1/tus/files/550e8400-e29b-41d4-a716-446655440000"
+          },
+          "expiresIn": {
+            "type": "number",
+            "description": "Upload session expiration time in seconds",
+            "example": 3600
+          }
+        }
+      },
+      "VideoStatus": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Video identifier",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "filename": {
+            "type": "string",
+            "description": "Original filename",
+            "example": "video.mp4"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "uploading",
+              "processing",
+              "completed",
+              "failed"
+            ],
+            "description": "Current processing status"
+          },
+          "progress": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Processing progress percentage",
+            "example": 75
+          },
+          "streamUrl": {
+            "type": "string",
+            "description": "HLS streaming URL (available when completed)",
+            "example": "http://localhost:9000/video-streams/550e8400-e29b-41d4-a716-446655440000/playlist.m3u8"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation timestamp"
+          },
+          "completedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Completion timestamp (if completed)"
+          },
+          "error": {
+            "type": "string",
+            "description": "Error message (if failed)"
+          }
+        }
+      },
+      "WebhookCallbackRequest": {
+        "type": "object",
+        "properties": {
+          "videoId": {
+            "type": "string",
+            "description": "Video identifier",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "filename": {
+            "type": "string",
+            "description": "Original filename",
+            "example": "video.mp4"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "completed",
+              "failed"
+            ],
+            "description": "Processing status"
+          },
+          "streamUrl": {
+            "type": "string",
+            "description": "HLS streaming URL (available when completed)",
+            "example": "http://localhost:9000/video-streams/550e8400-e29b-41d4-a716-446655440000/playlist.m3u8"
+          },
+          "error": {
+            "type": "string",
+            "description": "Error message (if failed)"
+          }
+        }
+      }
+    }
+  },
+  "tags": []
+}

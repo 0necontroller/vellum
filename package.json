@@ -16,16 +16,20 @@
     "@aws-sdk/client-s3": "^3.825.0",
     "@aws-sdk/s3-request-presigner": "^3.825.0",
     "@scalar/express-api-reference": "^0.8.13",
+    "@tus/file-store": "^2.0.0",
     "@tus/server": "^2.2.1",
     "amqplib": "^0.10.8",
+    "axios": "^1.11.0",
     "borgen": "^2.0.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
+    "helmet": "^8.1.0",
     "mime-types": "^3.0.1",
     "multer": "^2.0.1",
-    "swagger-jsdoc": "^6.2.8"
+    "swagger-jsdoc": "^6.2.8",
+    "uuid": "^9.0.0"
   },
   "devDependencies": {
     "@types/amqplib": "^0.10.7",
@@ -34,6 +38,7 @@
     "@types/express": "^5.0.2",
     "@types/multer": "^1.4.12",
     "@types/swagger-jsdoc": "^6.0.4",
+    "@types/uuid": "^9.0.0",
     "typescript": "^5.8.3"
   }
 }
