@@ -1,14 +1,16 @@
 import path from "path";
 import cors from "cors";
+import helmet from "helmet";
 import express from "express";
-import v1router from "./router/uploadGroup";
 import { Borgen, Logger } from "borgen";
 import { ENV } from "./lib/environments";
 import cookieParser from "cookie-parser";
-import generateOpenAPISpec, { apiDocsServer } from "./docs/openapi";
-import { apiReference } from "@scalar/express-api-reference";
+import { helmetConfig } from "./lib/helmet";
+import v1router from "./router/uploadGroup";
 import { initRabbitMQ } from "./lib/rabbitmq";
 import { createTusServer } from "./lib/tusServer";
+import { apiReference } from "@scalar/express-api-reference";
+import generateOpenAPISpec, { apiDocsServer } from "./docs/openapi";
 
 export const allowedOrigins = ["http://localhost:8001"];
 
@@ -29,6 +31,7 @@ app.use(
   })
 );
 
+app.use(helmet(helmetConfig));
 app.use(Borgen({}));
 app.use(express.json());
 app.use(cookieParser());
@@ -38,6 +41,10 @@ app.use(express.static(path.join(__dirname, "public")));
 // Initialize TUS server
 const tusServer = createTusServer();
 
+app.use(
+  "/openapi",
+  express.static(path.join(__dirname, "./docs/openapi.json"))
+);
 app.use(
   "/api/v1/docs",
   apiReference({
@@ -54,7 +61,8 @@ app.use("/api/v1/tus", (req, res) => {
 app.use("/api/v1", v1router);
 
 const startServer = async () => {
-  if (ENV.NODE_ENV === "dev") {
+  console.log("Starting server...", ENV.NODE_ENV);
+  if (ENV.NODE_ENV == "dev") {
     generateOpenAPISpec();
   }
 

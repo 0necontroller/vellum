@@ -1,8 +1,7 @@
-import amqp, { Connection, Channel } from "amqplib";
+import amqp, { Channel } from "amqplib";
 import { ENV } from "./environments";
 
 let channel: Channel | null = null;
-let connection: Connection | null = null;
 
 export enum RabbitMQQueues {
   VIDEO_PROCESSING = "video_processing",
