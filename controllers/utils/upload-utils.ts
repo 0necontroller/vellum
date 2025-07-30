@@ -13,102 +13,20 @@ import {
   ListObjectsV2Command,
 } from "@aws-sdk/client-s3";
 
-/**
- * Check if a video file is compatible with Shaka Packager
- * @param filePath Path to the video file
- * @returns Object with isCompatible flag and reason if not compatible
- */
-async function checkShakaCompatibility(
-  filePath: string
-): Promise<{ isCompatible: boolean; reason?: string }> {
-  try {
-    // Use ffprobe to get file information
-    const cmd = `ffprobe -v error -show_entries format=format_name,duration -show_streams -of json "${filePath}"`;
-    const output = execSync(cmd, { encoding: "utf-8" });
-    const info = JSON.parse(output);
-
-    // Check if file has video and audio streams
-    const videoStream = info.streams?.find(
-      (s: any) => s.codec_type === "video"
-    );
-    const audioStream = info.streams?.find(
-      (s: any) => s.codec_type === "audio"
-    );
-
-    if (!videoStream) {
-      return { isCompatible: false, reason: "No video stream found" };
-    }
-
-    // Check if duration is too short (less than 2 seconds)
-    const duration = parseFloat(info.format?.duration || "0");
-    if (duration < 2) {
-      return {
-        isCompatible: false,
-        reason: "Video is too short for Shaka Packager",
-      };
-    }
-
-    return { isCompatible: true };
-  } catch (error) {
-    console.error("Error checking Shaka compatibility:", error);
-    return { isCompatible: false, reason: "Unable to analyze video file" };
-  }
-}
-
-export async function transcodeAndUpload(
-  localPath: string,
-  filename: string,
-  packager: string = "ffmpeg"
-) {
+export async function transcodeAndUpload(localPath: string, filename: string) {
   const name = path.parse(filename).name;
   const outputDir = path.join(__dirname, `../videos/${name}`);
   fs.mkdirSync(outputDir, { recursive: true });
 
-  // If Shaka is selected, check compatibility first
-  if (packager === "shaka") {
-    const compatibility = await checkShakaCompatibility(localPath);
-    if (!compatibility.isCompatible) {
-      console.log(`Video not compatible with Shaka: ${compatibility.reason}`);
-      console.log("Falling back to FFmpeg");
-      packager = "ffmpeg";
-    }
-  }
+  // Use FFmpeg for transcoding
+  const cmd = `ffmpeg -i "${localPath}" \
+    -profile:v baseline -level 3.0 -start_number 0 \
+    -hls_time 10 -hls_list_size 0 -f hls "${outputDir}/index.m3u8"`;
 
-  let cmd: string;
-
-  if (packager === "shaka") {
-    // Create subdirectories for different quality renditions and segment types
-    fs.mkdirSync(`${outputDir}/audio`, { recursive: true });
-    fs.mkdirSync(`${outputDir}/video_low`, { recursive: true });
-    fs.mkdirSync(`${outputDir}/video_med`, { recursive: true });
-    fs.mkdirSync(`${outputDir}/video_high`, { recursive: true });
-
-    // Simplified Shaka Packager command with compatible parameters
-    // Based on error feedback and compatibility testing
-    cmd = `packager \
-      in="${localPath}",stream=audio,segment_template=${outputDir}/audio/$Number$.ts,playlist_name=${outputDir}/audio/main.m3u8,hls_group_id=audio,hls_name=ENGLISH \
-      in="${localPath}",stream=video,segment_template=${outputDir}/video_low/$Number$.ts,playlist_name=${outputDir}/video_low/main.m3u8,iframe_playlist_name=${outputDir}/video_low/iframe.m3u8,resolution=640x360,bps=800000 \
-      in="${localPath}",stream=video,segment_template=${outputDir}/video_med/$Number$.ts,playlist_name=${outputDir}/video_med/main.m3u8,iframe_playlist_name=${outputDir}/video_med/iframe.m3u8,resolution=854x480,bps=1500000 \
-      in="${localPath}",stream=video,segment_template=${outputDir}/video_high/$Number$.ts,playlist_name=${outputDir}/video_high/main.m3u8,iframe_playlist_name=${outputDir}/video_high/iframe.m3u8,resolution=1280x720,bps=3000000 \
-      --hls_master_playlist_output ${outputDir}/index.m3u8 \
-      --segment_duration 10 \
-      --hls_playlist_type VOD \
-      --default_language en \
-      --mpd_output ${outputDir}/manifest.mpd \
-      --hls_media_sequence_number 0`;
-
-    console.log("Using Shaka Packager to transcode video");
-  } else {
-    // Default to FFmpeg
-    cmd = `ffmpeg -i "${localPath}" \
-      -profile:v baseline -level 3.0 -start_number 0 \
-      -hls_time 10 -hls_list_size 0 -f hls "${outputDir}/index.m3u8"`;
-
-    console.log("Using FFmpeg to transcode video");
-  }
+  console.log("Using FFmpeg to transcode video");
 
   try {
-    console.log(`Starting transcoding with ${packager}...`);
+    console.log("Starting transcoding with FFmpeg...");
     console.log(`Input file: ${localPath}`);
     console.log(`Output directory: ${outputDir}`);
 
@@ -118,29 +36,12 @@ export async function transcodeAndUpload(
     // Execute the command with stdio inheritance to see progress
     execSync(cmd, { stdio: "inherit" });
 
-    console.log(`Transcoding complete with ${packager}`);
+    console.log("Transcoding complete with FFmpeg");
 
     // Verify essential files exist
-    if (packager === "shaka") {
-      const masterPlaylist = path.join(outputDir, "index.m3u8");
-      if (!fs.existsSync(masterPlaylist)) {
-        throw new Error(`Master playlist file not found at ${masterPlaylist}`);
-      }
-
-      // Check at least one video track was created
-      const videoLowDir = path.join(outputDir, "video_low");
-      if (
-        !fs.existsSync(videoLowDir) ||
-        fs.readdirSync(videoLowDir).length === 0
-      ) {
-        throw new Error("No video segments were created");
-      }
-    } else {
-      // Check FFmpeg output
-      const masterPlaylist = path.join(outputDir, "index.m3u8");
-      if (!fs.existsSync(masterPlaylist)) {
-        throw new Error(`Master playlist file not found at ${masterPlaylist}`);
-      }
+    const masterPlaylist = path.join(outputDir, "index.m3u8");
+    if (!fs.existsSync(masterPlaylist)) {
+      throw new Error(`Master playlist file not found at ${masterPlaylist}`);
     }
 
     // List the output files for verification
@@ -166,15 +67,8 @@ export async function transcodeAndUpload(
     };
     listFiles(outputDir);
   } catch (error) {
-    console.error(`Error during transcoding with ${packager}:`, error);
-
-    if (packager === "shaka") {
-      console.log("Falling back to FFmpeg due to Shaka Packager error");
-      // Try again with FFmpeg
-      return await transcodeAndUpload(localPath, filename, "ffmpeg");
-    } else {
-      throw new Error(`Failed to transcode video with ${packager}`);
-    }
+    console.error("Error during transcoding with FFmpeg:", error);
+    throw new Error("Failed to transcode video with FFmpeg");
   }
 
   // Function to upload files recursively (for handling subdirectories)
@@ -228,11 +122,11 @@ export async function transcodeAndUpload(
   // Start the recursive upload
   await uploadFile(outputDir, name);
 
-  // Store packager info as metadata for later retrieval
+  // Store metadata for later retrieval
   const metadataFile = path.join(outputDir, "metadata.json");
   const metadata = {
     name,
-    packager,
+    packager: "ffmpeg",
     createdAt: new Date().toISOString(),
     source: path.basename(localPath),
   };
