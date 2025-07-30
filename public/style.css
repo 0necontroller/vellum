@@ -1,0 +1,335 @@
+body {
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  margin: 0;
+  padding: 0;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  min-height: 100vh;
+  color: #333;
+  line-height: 1.6;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+h1,
+h2 {
+  text-align: center;
+  color: #2c3e50;
+  margin-bottom: 1.5rem;
+  position: relative;
+  padding-bottom: 10px;
+}
+
+h1::after,
+h2::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60px;
+  height: 3px;
+  background: linear-gradient(90deg, #4a6cf7, #007bff);
+  border-radius: 3px;
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 2rem auto;
+  max-width: 500px;
+  padding: 2rem;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+
+form:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.15);
+}
+
+input[type="file"] {
+  width: 0.1px;
+  height: 0.1px;
+  opacity: 0;
+  overflow: hidden;
+  position: absolute;
+  z-index: -1;
+}
+
+.file-upload-label {
+  display: inline-block;
+  padding: 12px 24px;
+  cursor: pointer;
+  border-radius: 5px;
+  background: linear-gradient(135deg, #e0f7fa 0%, #80deea 100%);
+  color: #006064;
+  font-weight: 600;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s;
+  text-align: center;
+  width: 80%;
+}
+
+.file-upload-label:hover {
+  background: linear-gradient(135deg, #80deea 0%, #4dd0e1 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+}
+
+.file-name {
+  margin-top: 10px;
+  font-size: 0.9rem;
+  color: #666;
+  text-align: center;
+  margin-bottom: 15px;
+}
+
+/* Upload Progress Styles */
+#upload-progress-container {
+  width: 80%;
+  margin: 15px 0;
+}
+
+.progress-bar-container {
+  height: 10px;
+  background-color: #e9ecef;
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 5px;
+}
+
+.progress-bar {
+  height: 100%;
+  width: 0;
+  background: linear-gradient(90deg, #4a6cf7, #007bff);
+  border-radius: 10px;
+  transition: width 0.2s ease;
+}
+
+.progress-text {
+  font-size: 0.8rem;
+  text-align: right;
+  color: #666;
+}
+
+button {
+  padding: 12px 30px;
+  background: linear-gradient(135deg, #4a6cf7 0%, #007bff 100%);
+  color: white;
+  border: none;
+  border-radius: 50px;
+  cursor: pointer;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  box-shadow: 0 4px 10px rgba(74, 108, 247, 0.3);
+  transition: all 0.3s ease;
+}
+
+button:hover {
+  background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+  transform: translateY(-3px);
+  box-shadow: 0 6px 15px rgba(74, 108, 247, 0.4);
+}
+
+button:active {
+  transform: translateY(-1px);
+}
+
+#videos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 25px;
+  margin: 2rem auto;
+  max-width: 1200px;
+  padding: 0 20px;
+  width: 100%;
+}
+
+.video-container {
+  border-radius: 12px;
+  overflow: hidden;
+  background-color: white;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+  position: relative;
+  padding-bottom: 20px;
+}
+
+/* Video Info Styles */
+.video-info {
+  padding: 15px;
+  border-bottom: 1px solid #eaeaea;
+  background-color: #f9f9f9;
+}
+
+.video-info h3 {
+  margin: 0;
+  font-size: 16px;
+  color: #333;
+  margin-bottom: 8px;
+}
+
+.packager-info,
+.date-info {
+  font-size: 13px;
+  color: #666;
+  margin: 5px 0;
+}
+
+.packager-info strong,
+.date-info strong {
+  color: #444;
+}
+
+.video-container:hover {
+  transform: translateY(-7px);
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.15);
+}
+
+.video-player {
+  width: 100%;
+  position: relative; /* For correct play button positioning */
+}
+
+video {
+  width: 100%;
+  height: auto;
+  border-radius: 12px 12px 0 0;
+  display: block;
+}
+
+/* Loading styles */
+#loading {
+  text-align: center;
+  color: #007bff;
+  font-size: 18px;
+  margin: 3rem auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.loading-spinner {
+  width: 50px;
+  height: 50px;
+  border: 5px solid rgba(74, 108, 247, 0.2);
+  border-radius: 50%;
+  border-top-color: #4a6cf7;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.no-videos {
+  text-align: center;
+  padding: 30px;
+  color: #666;
+  font-style: italic;
+  background-color: rgba(255, 255, 255, 0.8);
+  border-radius: 10px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+}
+
+.error-message {
+  color: #e53935;
+  background-color: rgba(229, 57, 53, 0.1);
+  padding: 15px;
+  border-radius: 5px;
+  text-align: center;
+  margin: 20px auto;
+  max-width: 600px;
+}
+
+/* Packager Options Styles */
+.packager-options {
+  margin-top: 1rem;
+  padding: 1rem;
+  background-color: #f8f9fa;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+  width: 80%;
+}
+
+.packager-options p {
+  margin: 0 0 0.5rem;
+  font-weight: 600;
+  color: #2c3e50;
+  text-align: center;
+}
+
+.radio-group {
+  margin: 0.5rem 0;
+  display: flex;
+  align-items: center;
+}
+
+.radio-group input[type="radio"] {
+  margin-right: 8px;
+}
+
+.radio-group label {
+  cursor: pointer;
+}
+
+/* Play Button Styles */
+.play-button {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.5);
+  color: white;
+  border: 2px solid white;
+  padding: 10px 15px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: all 0.3s ease;
+  z-index: 10;
+}
+
+.play-button:hover {
+  background: rgba(0, 0, 0, 0.8);
+}
+
+/* Quality selector styles */
+.quality-selector {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  background: rgba(0, 0, 0, 0.7);
+  padding: 5px 10px;
+  border-radius: 5px;
+  color: white;
+  font-size: 13px;
+  z-index: 10;
+  display: none;
+}
+
+.video-container:hover .quality-selector {
+  display: block;
+}
+
+.quality-selector select {
+  background: rgba(0, 0, 0, 0.5);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: 3px;
+  border-radius: 3px;
+  font-size: 12px;
+  margin-left: 5px;
+}

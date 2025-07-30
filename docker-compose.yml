@@ -1,0 +1,49 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - NODE_ENV=production
+    env_file:
+      - .env
+    ports:
+      - "8001:8001"
+    depends_on:
+      - minio
+
+  minio:
+    image: minio/minio:RELEASE.2025-03-12T18-04-18Z
+    command: server /data --console-address ":${MINIO_CONSOLE_PORT}"
+    ports:
+      - "${MINIO_API_PORT}:9000"
+      - "${MINIO_CONSOLE_PORT}:9001"
+    env_file:
+      - .env
+    volumes:
+      - minio_data:/data
+    restart: always
+    networks:
+      - app-network
+
+  minio-client:
+    image: minio/mc:RELEASE.2025-03-12T17-29-24Z
+    depends_on:
+      - minio
+    networks:
+      - app-network
+    entrypoint: >
+      /bin/sh -c "
+        sleep 10;
+        mc alias set local http://minio:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD};
+        mc mb -p local/${S3_BUCKET};
+        mc policy set public local/${S3_BUCKET};
+        exit 0;
+      "
+
+volumes:
+  minio_data:
+
+networks:
+  app-network:
+    driver: bridge

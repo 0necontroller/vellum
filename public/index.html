@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Video Uploader</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest" defer></script>
+    <script src="script.js" defer></script>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Video Uploader</h1>
+      <form
+        id="upload-form"
+        action="/api/v1/upload"
+        method="POST"
+        enctype="multipart/form-data"
+      >
+        <label for="video-upload" class="file-upload-label"
+          >Choose a video file</label
+        >
+        <div class="file-name" id="file-name-display">No file chosen</div>
+        <input
+          type="file"
+          name="video"
+          id="video-upload"
+          accept="video/*"
+          required
+        />
+
+        <div class="packager-options">
+          <p>Choose packager:</p>
+          <div class="radio-group">
+            <input
+              type="radio"
+              id="ffmpeg"
+              name="packager"
+              value="ffmpeg"
+              checked
+            />
+            <label for="ffmpeg">FFmpeg (Default)</label>
+          </div>
+          <div class="radio-group">
+            <input type="radio" id="shaka" name="packager" value="shaka" />
+            <label for="shaka">Shaka Packager</label>
+          </div>
+        </div>
+
+        <div id="upload-progress-container" style="display: none">
+          <div class="progress-bar-container">
+            <div class="progress-bar" id="upload-progress-bar"></div>
+          </div>
+          <div class="progress-text" id="upload-progress-text">0%</div>
+        </div>
+
+        <button type="submit">Upload Video</button>
+      </form>
+
+      <h2>Uploaded Videos</h2>
+      <div id="videos">
+        <!-- videos injected via script -->
+      </div>
+    </div>
+  </body>
+</html>

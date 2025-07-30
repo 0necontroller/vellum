@@ -1,0 +1,16 @@
+node_modules
+dist
+coverage
+.vscode
+.idea
+.DS_Store
+.env
+*.log
+*.tmp
+*.bak
+*.swp
+*.swo
+*.orig
+
+uploads
+videos
