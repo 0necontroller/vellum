@@ -11,6 +11,7 @@ services:
       - "8001:8001"
     depends_on:
       - minio
+      - rabbitmq
 
   minio:
     image: minio/minio:RELEASE.2025-03-12T18-04-18Z
@@ -22,6 +23,20 @@ services:
       - .env
     volumes:
       - minio_data:/data
+    restart: always
+    networks:
+      - app-network
+
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
     restart: always
     networks:
       - app-network
@@ -43,6 +58,7 @@ services:
 
 volumes:
   minio_data:
+  rabbitmq_data:
 
 networks:
   app-network:

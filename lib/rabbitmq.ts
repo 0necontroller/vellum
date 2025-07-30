@@ -1,7 +1,8 @@
-import amqp from "amqplib";
+import amqp, { Connection, Channel } from "amqplib";
 import { ENV } from "./environments";
 
-let channel: amqp.Channel | null = null;
+let channel: Channel | null = null;
+let connection: Connection | null = null;
 
 export enum RabbitMQQueues {
   VIDEO_PROCESSING = "video_processing",
@@ -36,10 +37,23 @@ export const initRabbitMQ = async (): Promise<void> => {
     const connection = await connectWithRetry();
     channel = await connection.createChannel();
     console.log("✅ RabbitMQ connected successfully");
+
+    // Start video processing worker
+    if (channel) {
+      const { startVideoProcessingWorker } = await import("./videoProcessor");
+      await startVideoProcessingWorker(channel);
+    }
   } catch (error) {
     console.error("Failed to connect to RabbitMQ:", error);
     throw error;
   }
+};
+
+/**
+ * Get the RabbitMQ channel
+ */
+export const getChannel = (): Channel | null => {
+  return channel;
 };
 
 /**

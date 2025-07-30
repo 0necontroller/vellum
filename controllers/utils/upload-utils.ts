@@ -12,11 +12,34 @@ import {
   GetObjectCommand,
   ListObjectsV2Command,
 } from "@aws-sdk/client-s3";
+import { publishToQueue, RabbitMQQueues } from "../../lib/rabbitmq";
+import { updateVideoRecord } from "../../lib/videoStore";
 
-export async function transcodeAndUpload(localPath: string, filename: string) {
-  const name = path.parse(filename).name;
+export interface VideoProcessingJob {
+  uploadId: string;
+  filePath: string;
+  filename: string;
+  packager: "ffmpeg";
+  callbackUrl?: string;
+}
+
+export const processVideoAsync = async (job: VideoProcessingJob) => {
+  await publishToQueue(RabbitMQQueues.VIDEO_PROCESSING, job);
+};
+
+export async function transcodeAndUpload(
+  localPath: string,
+  filename: string,
+  uploadId?: string
+) {
+  const name = uploadId || path.parse(filename).name;
   const outputDir = path.join(__dirname, `../videos/${name}`);
   fs.mkdirSync(outputDir, { recursive: true });
+
+  // Update progress if uploadId is provided
+  if (uploadId) {
+    updateVideoRecord(uploadId, { progress: 25 });
+  }
 
   // Use FFmpeg for transcoding
   const cmd = `ffmpeg -i "${localPath}" \
@@ -37,6 +60,11 @@ export async function transcodeAndUpload(localPath: string, filename: string) {
     execSync(cmd, { stdio: "inherit" });
 
     console.log("Transcoding complete with FFmpeg");
+
+    // Update progress if uploadId is provided
+    if (uploadId) {
+      updateVideoRecord(uploadId, { progress: 75 });
+    }
 
     // Verify essential files exist
     const masterPlaylist = path.join(outputDir, "index.m3u8");
