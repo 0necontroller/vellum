@@ -10,6 +10,12 @@ import { IServerResponse } from "../types/response";
 /**
  * @openapi
  * components:
+ *   securitySchemes:
+ *     BearerAuth:
+ *       type: http
+ *       scheme: bearer
+ *       bearerFormat: API_KEY
+ *       description: Bearer token authentication using API key from environment
  *   schemas:
  *     VideoUploadSessionRequest:
  *       type: object
@@ -27,7 +33,7 @@ import { IServerResponse } from "../types/response";
  *           example: 104857600
  *         packager:
  *           type: string
- *           enum: [ffmpeg, shaka]
+ *           enum: [ffmpeg]
  *           default: ffmpeg
  *           description: Video processing packager to use
  *         callbackUrl:
@@ -94,6 +100,8 @@ import { IServerResponse } from "../types/response";
  *     summary: Create a video upload session
  *     description: Creates a TUS upload session and returns a presigned URL for direct frontend uploads
  *     tags: [Video]
+ *     security:
+ *       - BearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -129,6 +137,19 @@ import { IServerResponse } from "../types/response";
  *                       example: error
  *                     message:
  *                       example: Missing required fields
+ *       401:
+ *         description: Unauthorized - Invalid or missing Bearer token
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/ServerResponse'
+ *                 - type: object
+ *                   properties:
+ *                     status:
+ *                       example: error
+ *                     message:
+ *                       example: Invalid API key
  */
 export const createVideoUpload = async (
   req: Request,
@@ -184,6 +205,8 @@ export const createVideoUpload = async (
  *   get:
  *     summary: Get video processing status
  *     tags: [Video]
+ *     security:
+ *       - BearerAuth: []
  *     parameters:
  *       - in: path
  *         name: uploadId
@@ -206,6 +229,19 @@ export const createVideoUpload = async (
  *                       example: success
  *                     data:
  *                       $ref: '#/components/schemas/VideoStatus'
+ *       401:
+ *         description: Unauthorized - Invalid or missing Bearer token
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/ServerResponse'
+ *                 - type: object
+ *                   properties:
+ *                     status:
+ *                       example: error
+ *                     message:
+ *                       example: Invalid API key
  *       404:
  *         description: Video not found
  *         content:
@@ -259,6 +295,8 @@ export const getVideoStatus = async (
  *     summary: List all videos
  *     description: Get a list of all uploaded and processed videos
  *     tags: [Video]
+ *     security:
+ *       - BearerAuth: []
  *     responses:
  *       200:
  *         description: Videos retrieved successfully
@@ -277,6 +315,19 @@ export const getVideoStatus = async (
  *                       type: array
  *                       items:
  *                         $ref: '#/components/schemas/VideoStatus'
+ *       401:
+ *         description: Unauthorized - Invalid or missing Bearer token
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/ServerResponse'
+ *                 - type: object
+ *                   properties:
+ *                     status:
+ *                       example: error
+ *                     message:
+ *                       example: Invalid API key
  */
 export const listAllVideos = async (
   req: Request,
@@ -306,6 +357,8 @@ export const listAllVideos = async (
  *     summary: Get callback status for a video
  *     description: Get the current callback delivery status for a specific video
  *     tags: [Video]
+ *     security:
+ *       - BearerAuth: []
  *     parameters:
  *       - in: path
  *         name: uploadId
@@ -343,6 +396,19 @@ export const listAllVideos = async (
  *                           type: string
  *                           format: date-time
  *                           nullable: true
+ *       401:
+ *         description: Unauthorized - Invalid or missing Bearer token
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/ServerResponse'
+ *                 - type: object
+ *                   properties:
+ *                     status:
+ *                       example: error
+ *                     message:
+ *                       example: Invalid API key
  *       404:
  *         description: Video not found
  */

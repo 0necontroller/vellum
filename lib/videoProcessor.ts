@@ -3,6 +3,8 @@ import { transcodeAndUpload } from "../controllers/utils/upload-utils";
 import { updateVideoRecord } from "../lib/videoStore";
 import { RabbitMQQueues } from "../lib/rabbitmq";
 import axios from "axios";
+import fs from "fs/promises";
+import path from "path";
 
 export interface VideoProcessingMessage {
   uploadId: string;
@@ -48,6 +50,18 @@ export const startVideoProcessingWorker = async (channel: Channel) => {
       });
 
       console.log(`✅ Video processing completed: ${job.filename}`);
+
+      // Clean up the original video file from disk after successful processing
+      try {
+        await fs.unlink(job.filePath);
+        console.log(`🗑️ Cleaned up original video file: ${job.filePath}`);
+      } catch (cleanupError) {
+        console.warn(
+          `⚠️ Failed to cleanup video file ${job.filePath}:`,
+          cleanupError
+        );
+        // Don't fail the entire process if cleanup fails
+      }
 
       // Send webhook callback if provided
       if (job.callbackUrl && updatedRecord) {
@@ -104,6 +118,19 @@ export const startVideoProcessingWorker = async (channel: Channel) => {
           status: "failed",
           error: error instanceof Error ? error.message : "Processing failed",
         });
+
+        // Clean up the original video file from disk even on failure
+        // to prevent disk space accumulation
+        try {
+          await fs.unlink(job.filePath);
+          console.log(`🗑️ Cleaned up failed video file: ${job.filePath}`);
+        } catch (cleanupError) {
+          console.warn(
+            `⚠️ Failed to cleanup failed video file ${job.filePath}:`,
+            cleanupError
+          );
+          // Don't fail the entire process if cleanup fails
+        }
 
         // Send webhook callback for failure if provided
         if (job.callbackUrl && updatedRecord) {

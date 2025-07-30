@@ -21,6 +21,11 @@
         "tags": [
           "Video"
         ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -84,6 +89,31 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing Bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ServerResponse"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "example": "error"
+                        },
+                        "message": {
+                          "example": "Invalid API key"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
           }
         }
       }
@@ -93,6 +123,11 @@
         "summary": "Get video processing status",
         "tags": [
           "Video"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
         ],
         "parameters": [
           {
@@ -124,6 +159,31 @@
                         },
                         "data": {
                           "$ref": "#/components/schemas/VideoStatus"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing Bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ServerResponse"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "example": "error"
+                        },
+                        "message": {
+                          "example": "Invalid API key"
                         }
                       }
                     }
@@ -167,6 +227,11 @@
         "tags": [
           "Video"
         ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
         "responses": {
           "200": {
             "description": "Videos retrieved successfully",
@@ -198,6 +263,31 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized - Invalid or missing Bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ServerResponse"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "example": "error"
+                        },
+                        "message": {
+                          "example": "Invalid API key"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
           }
         }
       }
@@ -208,6 +298,11 @@
         "description": "Get the current callback delivery status for a specific video",
         "tags": [
           "Video"
+        ],
+        "security": [
+          {
+            "BearerAuth": []
+          }
         ],
         "parameters": [
           {
@@ -272,6 +367,31 @@
               }
             }
           },
+          "401": {
+            "description": "Unauthorized - Invalid or missing Bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ServerResponse"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "example": "error"
+                        },
+                        "message": {
+                          "example": "Invalid API key"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
           "404": {
             "description": "Video not found"
           }
@@ -280,6 +400,14 @@
     }
   },
   "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "API_KEY",
+        "description": "Bearer token authentication using API key from environment"
+      }
+    },
     "schemas": {
       "VideoUploadSessionRequest": {
         "type": "object",
@@ -301,8 +429,7 @@
           "packager": {
             "type": "string",
             "enum": [
-              "ffmpeg",
-              "shaka"
+              "ffmpeg"
             ],
             "default": "ffmpeg",
             "description": "Video processing packager to use"
