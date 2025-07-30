@@ -1,16 +1,6 @@
 document.addEventListener("DOMContentLoaded", () => {
   const videosContainer = document.getElementById("videos");
 
-  // Legacy upload elements
-  const fileInput = document.getElementById("video-upload");
-  const fileNameDisplay = document.getElementById("file-name-display");
-  const uploadForm = document.getElementById("upload-form");
-  const uploadProgressContainer = document.getElementById(
-    "upload-progress-container"
-  );
-  const uploadProgressBar = document.getElementById("upload-progress-bar");
-  const uploadProgressText = document.getElementById("upload-progress-text");
-
   // TUS upload elements
   const tusFileInput = document.getElementById("tus-video-upload");
   const tusFileNameDisplay = document.getElementById("tus-file-name-display");
@@ -33,15 +23,6 @@ document.addEventListener("DOMContentLoaded", () => {
       tusFileNameDisplay.textContent = tusFileInput.files[0].name;
     } else {
       tusFileNameDisplay.textContent = "No file chosen";
-    }
-  });
-
-  // Handle legacy file input change
-  fileInput.addEventListener("change", () => {
-    if (fileInput.files.length > 0) {
-      fileNameDisplay.textContent = fileInput.files[0].name;
-    } else {
-      fileNameDisplay.textContent = "No file chosen";
     }
   });
 
@@ -77,29 +58,44 @@ document.addEventListener("DOMContentLoaded", () => {
       });
 
       if (!sessionResponse.ok) {
+        const errorData = await sessionResponse.json();
         throw new Error(
-          `Failed to create upload session: ${sessionResponse.statusText}`
+          `Failed to create upload session: ${
+            errorData.message || sessionResponse.statusText
+          }`
         );
       }
 
       const sessionData = await sessionResponse.json();
-      const { uploadId, uploadUrl } = sessionData.data;
+      const { uploadId } = sessionData.data;
 
       // Step 2: Upload using TUS
       tusUploadStatus.textContent = "Uploading...";
 
       const upload = new tus.Upload(file, {
-        endpoint: uploadUrl,
+        endpoint: "/api/v1/tus/files/",
         retryDelays: [0, 3000, 5000, 10000, 20000],
         metadata: {
           filename: file.name,
           packager: selectedPackager,
-          callbackUrl: callbackUrl || "",
+          uploadId: uploadId, // Pass the uploadId as metadata
         },
         onError: (error) => {
           console.error("Upload failed:", error);
           tusUploadStatus.textContent = "Upload failed";
-          alert(`Upload failed: ${error.message}`);
+
+          // Handle specific error cases
+          let errorMessage = error.message;
+          if (errorMessage.includes("Video record not found")) {
+            errorMessage =
+              "Upload session expired or invalid. Please try again.";
+          } else if (errorMessage.includes("not in uploading state")) {
+            errorMessage =
+              "Upload session is no longer valid. Please create a new upload session.";
+          }
+
+          alert(`Upload failed: ${errorMessage}`);
+          tusUploadProgressContainer.style.display = "none";
         },
         onProgress: (bytesUploaded, bytesTotal) => {
           const percentage = ((bytesUploaded / bytesTotal) * 100).toFixed(2);
@@ -157,86 +153,37 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   };
 
-  // Legacy upload handler
-  uploadForm.addEventListener("submit", (e) => {
-    e.preventDefault();
+  // Check callback status function
+  const checkCallbackStatus = async (videoId) => {
+    try {
+      const response = await fetch(`/api/v1/video/${videoId}/callback-status`);
+      const data = await response.json();
 
-    if (!fileInput.files.length) {
-      alert("Please select a video file to upload");
-      return;
-    }
+      if (data.status === "success") {
+        const callbackData = data.data;
+        let message = `Callback Status: ${callbackData.callbackStatus.toUpperCase()}`;
 
-    const formData = new FormData();
-    formData.append("video", fileInput.files[0]);
-
-    // Add the selected packager option
-    const selectedPackager = document.querySelector(
-      'input[name="packager"]:checked'
-    ).value;
-    formData.append("packager", selectedPackager);
-
-    const xhr = new XMLHttpRequest();
-
-    // Show progress container
-    uploadProgressContainer.style.display = "block";
-
-    // Track upload progress
-    xhr.upload.addEventListener("progress", (event) => {
-      if (event.lengthComputable) {
-        const percentComplete = Math.round((event.loaded / event.total) * 100);
-        uploadProgressBar.style.width = percentComplete + "%";
-        uploadProgressText.textContent = percentComplete + "%";
-      }
-    });
-
-    xhr.addEventListener("load", () => {
-      if (xhr.status === 200) {
-        // Success - reset form and reload videos
-        uploadForm.reset();
-        fileNameDisplay.textContent = "No file chosen";
-        uploadProgressContainer.style.display = "none";
-        uploadProgressBar.style.width = "0%";
-        uploadProgressText.textContent = "0%";
-
-        // Reload the videos after a short delay
-        setTimeout(() => {
-          loadVideos();
-        }, 1000);
-      } else {
-        // Error handling with more details
-        uploadProgressContainer.style.display = "none";
-
-        try {
-          // Try to get error details if available
-          const errorResponse = JSON.parse(xhr.responseText);
-          const errorMessage =
-            errorResponse.error || "Upload failed. Please try again.";
-
-          if (
-            errorMessage.includes("Shaka") ||
-            errorMessage.includes("packager")
-          ) {
-            alert(
-              "Error with Shaka Packager. The system will try to use FFmpeg instead. Please try again."
-            );
-          } else {
-            alert(errorMessage);
-          }
-        } catch (e) {
-          // Fallback error message
-          alert("Upload failed. Please try again.");
+        if (callbackData.callbackRetryCount > 0) {
+          message += `\nRetry attempts: ${callbackData.callbackRetryCount}`;
         }
+
+        if (callbackData.callbackLastAttempt) {
+          const lastAttempt = new Date(callbackData.callbackLastAttempt);
+          message += `\nLast attempt: ${lastAttempt.toLocaleString()}`;
+        }
+
+        alert(message);
+
+        // Refresh the video list to show updated status
+        loadVideos();
+      } else {
+        alert(`Failed to check callback status: ${data.message}`);
       }
-    });
-
-    xhr.addEventListener("error", () => {
-      alert("Upload failed. Please check your connection and try again.");
-      uploadProgressContainer.style.display = "none";
-    });
-
-    xhr.open("POST", "/api/v1/upload", true);
-    xhr.send(formData);
-  });
+    } catch (error) {
+      console.error("Error checking callback status:", error);
+      alert("Error checking callback status. Please try again.");
+    }
+  };
 
   // Create loading indicator
   const loadingIndicator = document.createElement("div");
@@ -336,6 +283,40 @@ document.addEventListener("DOMContentLoaded", () => {
             videoInfo.appendChild(errorInfo);
           }
 
+          // Add callback status if available
+          if (video.callbackUrl) {
+            const callbackInfo = document.createElement("div");
+            callbackInfo.className = "callback-info";
+            callbackInfo.innerHTML = `<strong>Callback URL:</strong> ${video.callbackUrl}`;
+
+            if (video.callbackStatus) {
+              const statusBadge = document.createElement("span");
+              statusBadge.className = `callback-status ${video.callbackStatus}`;
+              statusBadge.textContent = video.callbackStatus.toUpperCase();
+              callbackInfo.appendChild(document.createElement("br"));
+              callbackInfo.appendChild(document.createTextNode("Status: "));
+              callbackInfo.appendChild(statusBadge);
+
+              if (video.callbackRetryCount > 0) {
+                callbackInfo.appendChild(
+                  document.createTextNode(
+                    ` (${video.callbackRetryCount} attempts)`
+                  )
+                );
+              }
+
+              // Add callback status check button
+              const checkCallbackBtn = document.createElement("button");
+              checkCallbackBtn.textContent = "Check Callback Status";
+              checkCallbackBtn.className = "callback-check-btn";
+              checkCallbackBtn.onclick = () => checkCallbackStatus(video.id);
+              callbackInfo.appendChild(document.createElement("br"));
+              callbackInfo.appendChild(checkCallbackBtn);
+            }
+
+            videoInfo.appendChild(callbackInfo);
+          }
+
           videoContainer.appendChild(videoInfo);
 
           // Only show player if video is completed and has a stream URL
@@ -361,28 +342,76 @@ document.addEventListener("DOMContentLoaded", () => {
                 manifestLoadingMaxRetry: 5,
                 levelLoadingMaxRetry: 5,
                 debug: false,
+                enableWorker: true,
+                lowLatencyMode: false,
+                backBufferLength: 90,
               });
 
               // Load the HLS source
               hls.loadSource(streamUrl);
               hls.attachMedia(videoElement);
 
+              // Add loading indicator
+              const loadingIndicator = document.createElement("div");
+              loadingIndicator.className = "video-loading";
+              loadingIndicator.textContent = "Loading video...";
+              playerContainer.appendChild(loadingIndicator);
+
               hls.on(Hls.Events.MANIFEST_PARSED, function (event, data) {
                 console.log("Video manifest loaded:", streamUrl);
+                console.log(`Available quality levels: ${data.levels.length}`);
+
+                // Remove loading indicator
+                if (loadingIndicator.parentNode) {
+                  loadingIndicator.parentNode.removeChild(loadingIndicator);
+                }
+
+                // Create quality level info
+                if (data.levels.length > 1) {
+                  const qualityInfo = document.createElement("div");
+                  qualityInfo.className = "quality-info";
+                  qualityInfo.textContent = `${data.levels.length} quality levels available`;
+                  playerContainer.appendChild(qualityInfo);
+                }
 
                 // Create a "Start Playback" button for mobile devices
                 const playButton = document.createElement("button");
                 playButton.className = "play-button";
-                playButton.textContent = "Play Video";
+                playButton.textContent = "▶ Play Video";
                 playButton.onclick = function () {
-                  videoElement.play();
-                  this.style.display = "none";
+                  videoElement
+                    .play()
+                    .then(() => {
+                      this.style.display = "none";
+                    })
+                    .catch((error) => {
+                      console.warn("Autoplay failed:", error);
+                      // Button will remain visible for manual play
+                    });
                 };
                 playerContainer.appendChild(playButton);
               });
 
+              hls.on(Hls.Events.LEVEL_SWITCHED, function (event, data) {
+                console.log(`Quality switched to level ${data.level}`);
+                const level = hls.levels[data.level];
+                if (level) {
+                  console.log(
+                    `Resolution: ${level.width}x${
+                      level.height
+                    }, Bitrate: ${Math.round(level.bitrate / 1000)}kbps`
+                  );
+                }
+              });
+
               hls.on(Hls.Events.ERROR, function (event, data) {
                 console.warn("HLS error:", data);
+
+                // Remove loading indicator on error
+                if (loadingIndicator.parentNode) {
+                  loadingIndicator.parentNode.removeChild(loadingIndicator);
+                }
+
                 if (data.fatal) {
                   switch (data.type) {
                     case Hls.ErrorTypes.NETWORK_ERROR:
@@ -395,22 +424,63 @@ document.addEventListener("DOMContentLoaded", () => {
                       break;
                     default:
                       console.error("Fatal HLS error, cannot recover");
+                      // Show error message to user
+                      const errorMessage = document.createElement("div");
+                      errorMessage.className = "error-message";
+                      errorMessage.textContent =
+                        "Video playback error. Please try refreshing the page.";
+                      playerContainer.appendChild(errorMessage);
                       break;
                   }
                 }
               });
+
+              // Clean up HLS instance when video is removed
+              videoElement.addEventListener("beforeunload", () => {
+                if (hls) {
+                  hls.destroy();
+                }
+              });
             }
-            // For browsers with native HLS support
+            // For browsers with native HLS support (Safari)
             else if (
               videoElement.canPlayType("application/vnd.apple.mpegurl")
             ) {
+              console.log("Using native HLS support");
               videoElement.src = streamUrl;
+
+              // Add loading indicator for native HLS
+              const loadingIndicator = document.createElement("div");
+              loadingIndicator.className = "video-loading";
+              loadingIndicator.textContent = "Loading video...";
+              playerContainer.appendChild(loadingIndicator);
+
+              videoElement.addEventListener("loadedmetadata", () => {
+                if (loadingIndicator.parentNode) {
+                  loadingIndicator.parentNode.removeChild(loadingIndicator);
+                }
+                console.log("Native HLS video loaded successfully");
+              });
+
+              videoElement.addEventListener("error", () => {
+                if (loadingIndicator.parentNode) {
+                  loadingIndicator.parentNode.removeChild(loadingIndicator);
+                }
+                const errorMessage = document.createElement("div");
+                errorMessage.className = "error-message";
+                errorMessage.textContent =
+                  "Video playback error. Please check the stream URL.";
+                playerContainer.appendChild(errorMessage);
+              });
             } else {
               console.warn("Neither HLS.js nor native HLS support available");
               const fallbackMessage = document.createElement("div");
               fallbackMessage.className = "error-message";
-              fallbackMessage.textContent =
-                "Your browser doesn't support HLS video playback.";
+              fallbackMessage.innerHTML = `
+                <strong>HLS Playback Not Supported</strong><br>
+                Your browser doesn't support HLS video playback.<br>
+                <small>Please use a modern browser like Chrome, Firefox, Safari, or Edge.</small>
+              `;
               playerContainer.appendChild(fallbackMessage);
             }
 

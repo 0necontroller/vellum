@@ -15,5 +15,5 @@ export const ENV = {
   NODE_ENV: process.env.NODE_ENV || "dev",
   RABBITMQ_DEFAULT_USER: process.env.RABBITMQ_DEFAULT_USER || "guest",
   RABBITMQ_DEFAULT_PASS: process.env.RABBITMQ_DEFAULT_PASS || "guest",
-  CALLBACK_URL: process.env.CALLBACK_URL || "http://localhost:8001/callback",
+  API_KEY: process.env.API_KEY || "your_api_key_here",
 };

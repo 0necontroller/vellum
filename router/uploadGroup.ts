@@ -1,31 +1,21 @@
 import { Router } from "express";
 import {
-  getUploadedVideos,
-  uploadVideo,
-} from "../controllers/upload.Controller";
-import {
   createVideoUpload,
   getVideoStatus,
   listAllVideos,
+  getCallbackStatus,
 } from "../controllers/video.Controller";
-import { handleWebhookCallback } from "../controllers/webhook.Controller";
-import multer from "multer";
+import { authenticateBearer } from "../lib/auth";
 
 const router = Router();
-const upload = multer({ dest: "uploads/" });
 
-// Legacy upload endpoint (keeping for backward compatibility)
-router.post("/upload", upload.single("video"), uploadVideo);
+// Apply Bearer token authentication to all routes
+router.use(authenticateBearer);
 
-// New TUS-based video endpoints
+// TUS-based video endpoints
 router.post("/video/create", createVideoUpload);
 router.get("/video/:uploadId/status", getVideoStatus);
+router.get("/video/:uploadId/callback-status", getCallbackStatus);
 router.get("/videos", listAllVideos);
-
-// Webhook callback endpoint
-router.post("/callback", handleWebhookCallback);
-
-// Legacy videos endpoint (keeping for backward compatibility)
-router.get("/upload/videos", getUploadedVideos);
 
 export default router;

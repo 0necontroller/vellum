@@ -3,6 +3,8 @@ import { transcodeAndUpload } from "../controllers/utils/upload-utils";
 import { updateVideoRecord } from "../lib/videoStore";
 import { RabbitMQQueues } from "../lib/rabbitmq";
 import axios from "axios";
+import fs from "fs/promises";
+import path from "path";
 
 export interface VideoProcessingMessage {
   uploadId: string;
@@ -49,18 +51,57 @@ export const startVideoProcessingWorker = async (channel: Channel) => {
 
       console.log(`✅ Video processing completed: ${job.filename}`);
 
+      // Clean up the original video file from disk after successful processing
+      try {
+        await fs.unlink(job.filePath);
+        console.log(`🗑️ Cleaned up original video file: ${job.filePath}`);
+      } catch (cleanupError) {
+        console.warn(
+          `⚠️ Failed to cleanup video file ${job.filePath}:`,
+          cleanupError
+        );
+        // Don't fail the entire process if cleanup fails
+      }
+
       // Send webhook callback if provided
       if (job.callbackUrl && updatedRecord) {
         try {
-          await axios.post(job.callbackUrl, {
+          const response = await axios.post(job.callbackUrl, {
             videoId: job.uploadId,
             filename: job.filename,
             status: "completed",
             streamUrl,
           });
-          console.log(`📞 Webhook callback sent to: ${job.callbackUrl}`);
+
+          if (response.status === 200) {
+            // Update callback status to completed
+            updateVideoRecord(job.uploadId, {
+              callbackStatus: "completed",
+              callbackLastAttempt: new Date(),
+            });
+            console.log(
+              `📞 Webhook callback sent successfully to: ${job.callbackUrl}`
+            );
+          } else {
+            // First retry attempt failed, will be retried by cron job
+            updateVideoRecord(job.uploadId, {
+              callbackRetryCount: 1,
+              callbackLastAttempt: new Date(),
+            });
+            console.log(
+              `⚠️ Webhook callback failed with status ${response.status}, will retry`
+            );
+          }
         } catch (webhookError) {
-          console.error("Failed to send webhook callback:", webhookError);
+          // First retry attempt failed, will be retried by cron job
+          updateVideoRecord(job.uploadId, {
+            callbackRetryCount: 1,
+            callbackLastAttempt: new Date(),
+          });
+          console.error(
+            "Failed to send webhook callback, will retry:",
+            webhookError
+          );
         }
       }
 
@@ -78,19 +119,51 @@ export const startVideoProcessingWorker = async (channel: Channel) => {
           error: error instanceof Error ? error.message : "Processing failed",
         });
 
+        // Clean up the original video file from disk even on failure
+        // to prevent disk space accumulation
+        try {
+          await fs.unlink(job.filePath);
+          console.log(`🗑️ Cleaned up failed video file: ${job.filePath}`);
+        } catch (cleanupError) {
+          console.warn(
+            `⚠️ Failed to cleanup failed video file ${job.filePath}:`,
+            cleanupError
+          );
+          // Don't fail the entire process if cleanup fails
+        }
+
         // Send webhook callback for failure if provided
         if (job.callbackUrl && updatedRecord) {
           try {
-            await axios.post(job.callbackUrl, {
+            const response = await axios.post(job.callbackUrl, {
               videoId: job.uploadId,
               filename: job.filename,
               status: "failed",
               error:
                 error instanceof Error ? error.message : "Processing failed",
             });
+
+            if (response.status === 200) {
+              // Update callback status to completed
+              updateVideoRecord(job.uploadId, {
+                callbackStatus: "completed",
+                callbackLastAttempt: new Date(),
+              });
+            } else {
+              // First retry attempt failed, will be retried by cron job
+              updateVideoRecord(job.uploadId, {
+                callbackRetryCount: 1,
+                callbackLastAttempt: new Date(),
+              });
+            }
           } catch (webhookError) {
+            // First retry attempt failed, will be retried by cron job
+            updateVideoRecord(job.uploadId, {
+              callbackRetryCount: 1,
+              callbackLastAttempt: new Date(),
+            });
             console.error(
-              "Failed to send failure webhook callback:",
+              "Failed to send failure webhook callback, will retry:",
               webhookError
             );
           }

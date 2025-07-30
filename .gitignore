@@ -4,5 +4,6 @@ node_modules
 uploads
 videos
 build/
+data/
 
 GEMINI.md

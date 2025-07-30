@@ -31,29 +31,6 @@
             required
           />
 
-          <div class="packager-options">
-            <p>Choose packager:</p>
-            <div class="radio-group">
-              <input
-                type="radio"
-                id="tus-ffmpeg"
-                name="tus-packager"
-                value="ffmpeg"
-                checked
-              />
-              <label for="tus-ffmpeg">FFmpeg (Default)</label>
-            </div>
-            <div class="radio-group">
-              <input
-                type="radio"
-                id="tus-shaka"
-                name="tus-packager"
-                value="shaka"
-              />
-              <label for="tus-shaka">Shaka Packager</label>
-            </div>
-          </div>
-
           <div class="callback-url">
             <label for="callback-url">Webhook Callback URL (Optional):</label>
             <input
@@ -61,6 +38,21 @@
               id="callback-url"
               placeholder="https://yourapp.com/webhook"
             />
+          </div>
+
+          <div class="packager-selection">
+            <label>Video Packager:</label>
+            <div class="radio-group">
+              <label>
+                <input
+                  type="radio"
+                  name="tus-packager"
+                  value="ffmpeg"
+                  checked
+                />
+                FFmpeg (Recommended)
+              </label>
+            </div>
           </div>
 
           <div id="tus-upload-progress-container" style="display: none">
@@ -74,57 +66,6 @@
           <button type="submit">Upload Video (TUS)</button>
         </form>
       </div>
-
-      <!-- Legacy Upload Section -->
-      <div class="upload-section">
-        <h2>Legacy Upload (Direct)</h2>
-        <form
-          id="upload-form"
-          action="/api/v1/upload"
-          method="POST"
-          enctype="multipart/form-data"
-        >
-          <label for="video-upload" class="file-upload-label"
-            >Choose a video file</label
-          >
-          <div class="file-name" id="file-name-display">No file chosen</div>
-          <input
-            type="file"
-            name="video"
-            id="video-upload"
-            accept="video/*"
-            required
-          />
-
-          <div class="packager-options">
-            <p>Choose packager:</p>
-            <div class="radio-group">
-              <input
-                type="radio"
-                id="ffmpeg"
-                name="packager"
-                value="ffmpeg"
-                checked
-              />
-              <label for="ffmpeg">FFmpeg (Default)</label>
-            </div>
-            <div class="radio-group">
-              <input type="radio" id="shaka" name="packager" value="shaka" />
-              <label for="shaka">Shaka Packager</label>
-            </div>
-          </div>
-
-          <div id="upload-progress-container" style="display: none">
-            <div class="progress-bar-container">
-              <div class="progress-bar" id="upload-progress-bar"></div>
-            </div>
-            <div class="progress-text" id="upload-progress-text">0%</div>
-          </div>
-
-          <button type="submit">Upload Video (Legacy)</button>
-        </form>
-      </div>
-
       <h2>Uploaded Videos</h2>
       <div id="videos">
         <!-- videos injected via script -->
