@@ -10,3 +10,10 @@ services:
     env_file:
       - .env
     command: npm run dev
+    restart: unless-stopped
+  minio:
+    restart: no
+  rabbitmq:
+    restart: unless-stopped
+  minio-client:
+    restart: no

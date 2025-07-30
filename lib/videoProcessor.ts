@@ -1,7 +1,6 @@
 import { Channel } from "amqplib";
 import { transcodeAndUpload } from "../controllers/utils/upload-utils";
 import { updateVideoRecord } from "../lib/videoStore";
-import { ENV } from "../lib/environments";
 import { RabbitMQQueues } from "../lib/rabbitmq";
 import axios from "axios";
 
@@ -9,7 +8,7 @@ export interface VideoProcessingMessage {
   uploadId: string;
   filePath: string;
   filename: string;
-  packager: "ffmpeg" | "shaka";
+  packager: "ffmpeg";
   callbackUrl?: string;
 }
 

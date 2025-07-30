@@ -8,6 +8,7 @@ import cookieParser from "cookie-parser";
 import generateOpenAPISpec, { apiDocsServer } from "./docs/openapi";
 import { apiReference } from "@scalar/express-api-reference";
 import { initRabbitMQ } from "./lib/rabbitmq";
+import { createTusServer } from "./lib/tusServer";
 
 export const allowedOrigins = ["http://localhost:8001"];
 
@@ -23,7 +24,7 @@ app.use(
         callback(new Error("Not allowed by CORS"));
       }
     },
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"],
     credentials: true,
   })
 );
@@ -34,12 +35,20 @@ app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "public")));
 
+// Initialize TUS server
+const tusServer = createTusServer();
+
 app.use(
   "/api/v1/docs",
   apiReference({
     url: `${apiDocsServer}/openapi`,
   })
 );
+
+// TUS upload handling - must come before other routes
+app.use("/api/v1/tus", (req, res) => {
+  tusServer.handle(req, res);
+});
 
 // Routes
 app.use("/api/v1", v1router);
