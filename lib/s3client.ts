@@ -9,7 +9,7 @@ import { ENV } from "./environments";
 import path from "path";
 
 // Initialize S3 client with MinIO configuration
-const minioClient = new S3Client({
+const s3Client = new S3Client({
   region: "us-east-1",
   endpoint: ENV.S3_ENDPOINT,
   credentials: {
@@ -34,7 +34,7 @@ export const deleteFile = async (key: string): Promise<void> => {
       Key: key,
     };
 
-    await minioClient.send(new DeleteObjectCommand(params));
+    await s3Client.send(new DeleteObjectCommand(params));
   } catch (error) {
     console.error("Error deleting file from MinIO:", error);
     throw new Error("Failed to delete file from storage");
@@ -59,7 +59,7 @@ export const getPresignedUrl = async (
 
     const command = new GetObjectCommand(params);
     // Use the EXTERNAL client to generate the URL
-    const signedUrl = await getSignedUrl(minioClient, command, {
+    const signedUrl = await getSignedUrl(s3Client, command, {
       expiresIn,
     });
 
@@ -93,4 +93,4 @@ const STREAMING_CONTENT_TYPES = {
 };
 
 // Update exports to include content types
-export { minioClient, BUCKET_NAME, STREAMING_CONTENT_TYPES };
+export { s3Client, BUCKET_NAME, STREAMING_CONTENT_TYPES };
