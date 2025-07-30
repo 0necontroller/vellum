@@ -3,7 +3,7 @@ import path from "path";
 import { execSync } from "child_process";
 import { ENV } from "../../lib/environments";
 import {
-  minioClient,
+  s3Client,
   BUCKET_NAME,
   STREAMING_CONTENT_TYPES,
 } from "../../lib/s3client";
@@ -212,7 +212,7 @@ export async function transcodeAndUpload(
         }
 
         const key = `${prefix}/${file}`;
-        await minioClient.send(
+        await s3Client.send(
           new PutObjectCommand({
             Bucket: BUCKET_NAME,
             Key: key,
@@ -239,7 +239,7 @@ export async function transcodeAndUpload(
   fs.writeFileSync(metadataFile, JSON.stringify(metadata, null, 2));
 
   // Also upload metadata to S3
-  await minioClient.send(
+  await s3Client.send(
     new PutObjectCommand({
       Bucket: BUCKET_NAME,
       Key: `${name}/metadata.json`,
@@ -266,7 +266,7 @@ export async function listVideos(): Promise<VideoInfo[]> {
       Delimiter: "/",
     });
 
-    const { CommonPrefixes = [] } = await minioClient.send(command);
+    const { CommonPrefixes = [] } = await s3Client.send(command);
     const folders = CommonPrefixes.map((prefix) =>
       prefix.Prefix?.replace(/\/$/, "")
     ).filter((prefix): prefix is string => !!prefix);
@@ -285,7 +285,7 @@ export async function listVideos(): Promise<VideoInfo[]> {
           Key: `${folder}/metadata.json`,
         });
 
-        const response = await minioClient.send(metadataCommand);
+        const response = await s3Client.send(metadataCommand);
         if (response && response.Body) {
           // Convert stream to string
           const streamToString = async (stream: any): Promise<string> => {
