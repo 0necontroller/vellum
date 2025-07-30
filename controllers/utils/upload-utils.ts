@@ -21,6 +21,7 @@ export interface VideoProcessingJob {
   filename: string;
   packager: "ffmpeg";
   callbackUrl?: string;
+  s3Path?: string;
 }
 
 export const processVideoAsync = async (job: VideoProcessingJob) => {
@@ -30,9 +31,14 @@ export const processVideoAsync = async (job: VideoProcessingJob) => {
 export async function transcodeAndUpload(
   localPath: string,
   filename: string,
-  uploadId?: string
+  uploadId?: string,
+  s3Path?: string
 ) {
   const name = uploadId || path.parse(filename).name;
+
+  // Construct the S3 prefix using custom path if provided
+  const s3Prefix = s3Path ? `${s3Path.replace(/^\/|\/$/g, "")}/${name}` : name;
+
   const outputDir = path.join(__dirname, `../videos/${name}`);
   fs.mkdirSync(outputDir, { recursive: true });
 
@@ -148,7 +154,7 @@ export async function transcodeAndUpload(
   }
 
   // Start the recursive upload
-  await uploadFile(outputDir, name);
+  await uploadFile(outputDir, s3Prefix);
 
   // Store metadata for later retrieval
   const metadataFile = path.join(outputDir, "metadata.json");
@@ -164,13 +170,13 @@ export async function transcodeAndUpload(
   await s3Client.send(
     new PutObjectCommand({
       Bucket: BUCKET_NAME,
-      Key: `${name}/metadata.json`,
+      Key: `${s3Prefix}/metadata.json`,
       Body: JSON.stringify(metadata, null, 2),
       ContentType: "application/json",
     })
   );
 
-  return `${ENV.S3_ENDPOINT}/${BUCKET_NAME}/${name}/index.m3u8`;
+  return `${ENV.S3_ENDPOINT}/${BUCKET_NAME}/${s3Prefix}/index.m3u8`;
 }
 
 // Interface for video information
