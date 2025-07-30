@@ -9,11 +9,10 @@ import { IServerResponse } from "../types/response";
  *     VideoUploadRequest:
  *       type: object
  *       properties:
- *         packager:
+ *         file:
  *           type: string
- *           enum: [ffmpeg, shaka]
- *           default: ffmpeg
- *           description: Video packaging tool to use
+ *           format: binary
+ *           description: Video file to upload
  *     VideoResponse:
  *       type: object
  *       properties:
@@ -60,11 +59,6 @@ import { IServerResponse } from "../types/response";
  *                 type: string
  *                 format: binary
  *                 description: Video file to upload
- *               packager:
- *                 type: string
- *                 enum: [ffmpeg, shaka]
- *                 default: ffmpeg
- *                 description: Video packaging tool to use
  *     responses:
  *       200:
  *         description: Video uploaded and transcoded successfully
@@ -129,9 +123,8 @@ export const uploadVideo = async (
       });
       return;
     }
-    // Get the packager type from the form data (default to ffmpeg if not provided)
-    const packager = req.body.packager || "ffmpeg";
-    await transcodeAndUpload(req.file.path, req.file.originalname, packager);
+    // Transcode and upload the video using FFmpeg
+    await transcodeAndUpload(req.file.path, req.file.originalname);
     res.status(200).json({
       status: "success",
       message: "Video uploaded successfully",
@@ -145,9 +138,7 @@ export const uploadVideo = async (
     res.status(500).json({
       status: "error",
       message: errorMessage,
-      data: {
-        packager: req.body.packager || "ffmpeg",
-      },
+      data: null,
     });
   }
 };
@@ -215,9 +206,7 @@ export const getUploadedVideos = async (
     res.status(500).json({
       status: "error",
       message: errorMessage,
-      data: {
-        packager: req.body.packager || "ffmpeg",
-      },
+      data: null,
     });
   }
 };
