@@ -156,6 +156,7 @@ export const createVideoUpload = async (
       filename,
       status: "uploading",
       packager,
+      callbackUrl,
     });
 
     res.json({
@@ -293,6 +294,90 @@ export const listAllVideos = async (
     res.status(500).json({
       status: "error",
       message: "Failed to list videos",
+      data: null,
+    });
+  }
+};
+
+/**
+ * @openapi
+ * /api/v1/video/{uploadId}/callback-status:
+ *   get:
+ *     summary: Get callback status for a video
+ *     description: Get the current callback delivery status for a specific video
+ *     tags: [Video]
+ *     parameters:
+ *       - in: path
+ *         name: uploadId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Upload session ID
+ *         example: "550e8400-e29b-41d4-a716-446655440000"
+ *     responses:
+ *       200:
+ *         description: Callback status retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/ServerResponse'
+ *                 - type: object
+ *                   properties:
+ *                     status:
+ *                       example: success
+ *                     message:
+ *                       example: Callback status retrieved successfully
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         callbackUrl:
+ *                           type: string
+ *                           nullable: true
+ *                         callbackStatus:
+ *                           type: string
+ *                           enum: [pending, completed, failed]
+ *                         callbackRetryCount:
+ *                           type: number
+ *                         callbackLastAttempt:
+ *                           type: string
+ *                           format: date-time
+ *                           nullable: true
+ *       404:
+ *         description: Video not found
+ */
+export const getCallbackStatus = async (
+  req: Request,
+  res: Response<IServerResponse>
+) => {
+  try {
+    const { uploadId } = req.params;
+    const video = getVideoRecord(uploadId);
+
+    if (!video) {
+      res.status(404).json({
+        status: "error",
+        message: "Video not found",
+        data: null,
+      });
+      return;
+    }
+
+    res.json({
+      status: "success",
+      message: "Callback status retrieved successfully",
+      data: {
+        callbackUrl: video.callbackUrl,
+        callbackStatus: video.callbackStatus,
+        callbackRetryCount: video.callbackRetryCount,
+        callbackLastAttempt: video.callbackLastAttempt,
+      },
+    });
+  } catch (error) {
+    console.error("Error getting callback status:", error);
+    res.status(500).json({
+      status: "error",
+      message: "Failed to get callback status",
       data: null,
     });
   }

@@ -52,15 +52,42 @@ export const startVideoProcessingWorker = async (channel: Channel) => {
       // Send webhook callback if provided
       if (job.callbackUrl && updatedRecord) {
         try {
-          await axios.post(job.callbackUrl, {
+          const response = await axios.post(job.callbackUrl, {
             videoId: job.uploadId,
             filename: job.filename,
             status: "completed",
             streamUrl,
           });
-          console.log(`📞 Webhook callback sent to: ${job.callbackUrl}`);
+
+          if (response.status === 200) {
+            // Update callback status to completed
+            updateVideoRecord(job.uploadId, {
+              callbackStatus: "completed",
+              callbackLastAttempt: new Date(),
+            });
+            console.log(
+              `📞 Webhook callback sent successfully to: ${job.callbackUrl}`
+            );
+          } else {
+            // First retry attempt failed, will be retried by cron job
+            updateVideoRecord(job.uploadId, {
+              callbackRetryCount: 1,
+              callbackLastAttempt: new Date(),
+            });
+            console.log(
+              `⚠️ Webhook callback failed with status ${response.status}, will retry`
+            );
+          }
         } catch (webhookError) {
-          console.error("Failed to send webhook callback:", webhookError);
+          // First retry attempt failed, will be retried by cron job
+          updateVideoRecord(job.uploadId, {
+            callbackRetryCount: 1,
+            callbackLastAttempt: new Date(),
+          });
+          console.error(
+            "Failed to send webhook callback, will retry:",
+            webhookError
+          );
         }
       }
 
@@ -81,16 +108,35 @@ export const startVideoProcessingWorker = async (channel: Channel) => {
         // Send webhook callback for failure if provided
         if (job.callbackUrl && updatedRecord) {
           try {
-            await axios.post(job.callbackUrl, {
+            const response = await axios.post(job.callbackUrl, {
               videoId: job.uploadId,
               filename: job.filename,
               status: "failed",
               error:
                 error instanceof Error ? error.message : "Processing failed",
             });
+
+            if (response.status === 200) {
+              // Update callback status to completed
+              updateVideoRecord(job.uploadId, {
+                callbackStatus: "completed",
+                callbackLastAttempt: new Date(),
+              });
+            } else {
+              // First retry attempt failed, will be retried by cron job
+              updateVideoRecord(job.uploadId, {
+                callbackRetryCount: 1,
+                callbackLastAttempt: new Date(),
+              });
+            }
           } catch (webhookError) {
+            // First retry attempt failed, will be retried by cron job
+            updateVideoRecord(job.uploadId, {
+              callbackRetryCount: 1,
+              callbackLastAttempt: new Date(),
+            });
             console.error(
-              "Failed to send failure webhook callback:",
+              "Failed to send failure webhook callback, will retry:",
               webhookError
             );
           }

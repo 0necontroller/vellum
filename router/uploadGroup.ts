@@ -1,25 +1,19 @@
 import { Router } from "express";
-import {
-  getUploadedVideos,
-  uploadVideo,
-} from "../controllers/upload.Controller";
+import { getUploadedVideos } from "../controllers/upload.Controller";
 import {
   createVideoUpload,
   getVideoStatus,
   listAllVideos,
+  getCallbackStatus,
 } from "../controllers/video.Controller";
 import { handleWebhookCallback } from "../controllers/webhook.Controller";
-import multer from "multer";
 
 const router = Router();
-const upload = multer({ dest: "uploads/" });
 
-// Legacy upload endpoint (keeping for backward compatibility)
-router.post("/upload", upload.single("video"), uploadVideo);
-
-// New TUS-based video endpoints
+// TUS-based video endpoints
 router.post("/video/create", createVideoUpload);
 router.get("/video/:uploadId/status", getVideoStatus);
+router.get("/video/:uploadId/callback-status", getCallbackStatus);
 router.get("/videos", listAllVideos);
 
 // Webhook callback endpoint

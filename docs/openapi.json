@@ -14,126 +14,6 @@
     }
   ],
   "paths": {
-    "/api/v1/upload": {
-      "post": {
-        "summary": "Upload and transcode a video file",
-        "tags": [
-          "Upload"
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "file"
-                ],
-                "properties": {
-                  "file": {
-                    "type": "string",
-                    "format": "binary",
-                    "description": "Video file to upload"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Video uploaded and transcoded successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ServerResponse"
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "status": {
-                          "example": "success"
-                        },
-                        "message": {
-                          "example": "Video uploaded successfully"
-                        },
-                        "data": {
-                          "type": "null"
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "No file uploaded",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ServerResponse"
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "status": {
-                          "example": "error"
-                        },
-                        "message": {
-                          "example": "No file uploaded"
-                        },
-                        "data": {
-                          "type": "null"
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/ServerResponse"
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "status": {
-                          "example": "error"
-                        },
-                        "message": {
-                          "example": "Failed to upload video"
-                        },
-                        "data": {
-                          "type": "object",
-                          "properties": {
-                            "packager": {
-                              "type": "string",
-                              "example": "ffmpeg"
-                            }
-                          }
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/upload/videos": {
       "get": {
         "summary": "Get list of uploaded videos",
@@ -393,6 +273,82 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/v1/video/{uploadId}/callback-status": {
+      "get": {
+        "summary": "Get callback status for a video",
+        "description": "Get the current callback delivery status for a specific video",
+        "tags": [
+          "Video"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "uploadId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Upload session ID",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Callback status retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ServerResponse"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "example": "success"
+                        },
+                        "message": {
+                          "example": "Callback status retrieved successfully"
+                        },
+                        "data": {
+                          "type": "object",
+                          "properties": {
+                            "callbackUrl": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "callbackStatus": {
+                              "type": "string",
+                              "enum": [
+                                "pending",
+                                "completed",
+                                "failed"
+                              ]
+                            },
+                            "callbackRetryCount": {
+                              "type": "number"
+                            },
+                            "callbackLastAttempt": {
+                              "type": "string",
+                              "format": "date-time",
+                              "nullable": true
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Video not found"
           }
         }
       }
