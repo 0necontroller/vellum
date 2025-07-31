@@ -16,4 +16,9 @@ export const ENV = {
   RABBITMQ_DEFAULT_USER: process.env.RABBITMQ_DEFAULT_USER || "guest",
   RABBITMQ_DEFAULT_PASS: process.env.RABBITMQ_DEFAULT_PASS || "guest",
   API_KEY: process.env.API_KEY || "your_api_key_here",
+  ALLOWED_ORIGINS:
+    process.env.ALLOWED_ORIGINS ||
+    "http://localhost:3000,http://localhost:3001",
 };
+
+export const allowedOrigins = ENV.ALLOWED_ORIGINS.split(",");
