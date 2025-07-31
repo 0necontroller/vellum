@@ -146,6 +146,7 @@ export async function transcodeAndUpload(
             Key: key,
             Body: data,
             ContentType: contentType,
+            ACL: "public-read",
           })
         );
         console.log(`Uploaded: ${key}`);
@@ -173,6 +174,7 @@ export async function transcodeAndUpload(
       Key: `${s3Prefix}/metadata.json`,
       Body: JSON.stringify(metadata, null, 2),
       ContentType: "application/json",
+      ACL: "public-read",
     })
   );
 

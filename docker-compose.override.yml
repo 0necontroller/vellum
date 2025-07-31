@@ -5,10 +5,6 @@ services:
     volumes:
       - .:/app
       - /app/node_modules
-    environment:
-      - NODE_ENV=dev
-    env_file:
-      - .env
     command: npm run dev
     restart: unless-stopped
 
@@ -24,7 +20,7 @@ services:
       - minio_data:/data
     restart: no
     networks:
-      - app-network
+      - vellum-network
   rabbitmq:
     restart: unless-stopped
 
@@ -33,7 +29,7 @@ services:
     depends_on:
       - minio
     networks:
-      - app-network
+      - vellum-network
     restart: no
     entrypoint: >
       /bin/sh -c "

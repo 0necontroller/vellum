@@ -12,6 +12,7 @@ export const ENV = {
   S3_SECRET_KEY: process.env.S3_SECRET_KEY || "minio123",
   S3_ENDPOINT: process.env.S3_ENDPOINT || "http://localhost:9000",
   S3_BUCKET: process.env.S3_BUCKET || "my-bucket",
+  S3_REGION: process.env.S3_REGION || "us-east-1",
   NODE_ENV: process.env.NODE_ENV || "dev",
   RABBITMQ_DEFAULT_USER: process.env.RABBITMQ_DEFAULT_USER || "guest",
   RABBITMQ_DEFAULT_PASS: process.env.RABBITMQ_DEFAULT_PASS || "guest",
@@ -19,6 +20,7 @@ export const ENV = {
   ALLOWED_ORIGINS:
     process.env.ALLOWED_ORIGINS ||
     "http://localhost:3000,http://localhost:3001",
+  VELLUM_HOST: process.env.VELLUM_HOST || "http://localhost:9005",
 };
 
 export const allowedOrigins = ENV.ALLOWED_ORIGINS.split(",");

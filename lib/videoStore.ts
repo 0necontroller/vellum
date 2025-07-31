@@ -58,7 +58,7 @@ try {
 
 export const createVideoRecord = (data: Partial<VideoRecord>): VideoRecord => {
   const record: VideoRecord = {
-    id: data.id || uuidv4(),
+    id: data.id as string,
     filename: data.filename || "",
     status: "uploading",
     progress: 0,

@@ -6,6 +6,8 @@ import {
   getAllVideos,
 } from "../lib/videoStore";
 import { IServerResponse } from "../types/response";
+import { ENV } from "../lib/environments";
+import { BUCKET_NAME } from "../lib/s3client";
 
 /**
  * @openapi
@@ -55,6 +57,10 @@ import { IServerResponse } from "../types/response";
  *           type: string
  *           description: TUS upload URL for client-side uploads
  *           example: "http://localhost:8001/api/v1/tus/files/550e8400-e29b-41d4-a716-446655440000"
+ *         videoUrl:
+ *           type: string
+ *           description: Future HLS streaming URL where the processed video will be available
+ *           example: "http://localhost:9000/video-streams/550e8400-e29b-41d4-a716-446655440000/index.m3u8"
  *         expiresIn:
  *           type: number
  *           description: Upload session expiration time in seconds
@@ -207,9 +213,7 @@ export const createVideoUpload = async (
     }
 
     const uploadId = uuidv4();
-    const uploadUrl = `${req.protocol}://${req.get(
-      "host"
-    )}/api/v1/tus/files/${uploadId}`;
+    const uploadUrl = `${ENV.VELLUM_HOST}/api/v1/tus/files/${uploadId}`;
 
     createVideoRecord({
       id: uploadId,
@@ -220,12 +224,19 @@ export const createVideoUpload = async (
       s3Path: cleanS3Path,
     });
 
+    // Construct the video URL using the same logic as in transcodeAndUpload
+    const s3Prefix = cleanS3Path
+      ? `${cleanS3Path.replace(/^\/|\/$/g, "")}/${uploadId}`
+      : uploadId;
+    const videoUrl = `${ENV.S3_ENDPOINT}/${BUCKET_NAME}/${s3Prefix}/index.m3u8`;
+
     res.json({
       status: "success",
       message: "Upload session created",
       data: {
         uploadId,
         uploadUrl,
+        videoUrl,
         expiresIn: 3600,
       },
     });
