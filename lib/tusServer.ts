@@ -4,6 +4,7 @@ import path from "path";
 import { publishToQueue, RabbitMQQueues } from "./rabbitmq";
 import { ENV } from "./environments";
 import { updateVideoRecord, getVideoRecord } from "./videoStore";
+import { validateUpload, formatValidationErrors } from "./validation";
 
 export const createTusServer = () => {
   const server = new Server({
@@ -71,6 +72,27 @@ export const createTusServer = () => {
         throw new Error(
           `Video record is not in uploading state. Current status: ${videoRecord.status}`
         );
+      }
+
+      // Additional validation of file constraints during TUS upload
+      // This acts as a secondary check in case someone tries to bypass the API validation
+      if (upload.size && upload.metadata?.filename) {
+        const validationResult = validateUpload(
+          upload.metadata.filename,
+          upload.size
+        );
+        if (!validationResult.isValid) {
+          console.error(
+            `❌ TUS upload validation failed: ${formatValidationErrors(
+              validationResult.errors
+            )}`
+          );
+          throw new Error(
+            `Upload validation failed: ${formatValidationErrors(
+              validationResult.errors
+            )}`
+          );
+        }
       }
 
       console.log(`✅ Upload validated for ${uploadId}`);

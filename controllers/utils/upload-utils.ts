@@ -104,7 +104,8 @@ export async function transcodeAndUpload(
   // Construct the S3 prefix using custom path if provided
   const s3Prefix = s3Path ? `${s3Path.replace(/^\/|\/$/g, "")}/${name}` : name;
 
-  const outputDir = path.join(__dirname, `../videos/${name}`);
+  // Use absolute path from process.cwd() to avoid build path issues
+  const outputDir = path.resolve(process.cwd(), "controllers", "videos", name);
   fs.mkdirSync(outputDir, { recursive: true });
 
   // Update progress if uploadId is provided

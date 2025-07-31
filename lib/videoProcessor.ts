@@ -86,7 +86,7 @@ export const startVideoProcessingWorker = async (channel: Channel) => {
               `⚠️ Webhook callback failed with status ${response.status}, will retry`
             );
           }
-        } catch (webhookError) {
+        } catch (webhookError: any) {
           // First retry attempt failed, will be retried by cron job
           updateVideoRecord(job.uploadId, {
             callbackRetryCount: 1,
@@ -94,15 +94,15 @@ export const startVideoProcessingWorker = async (channel: Channel) => {
           });
           console.error(
             "Failed to send webhook callback, will retry:",
-            webhookError
+            webhookError.message
           );
         }
       }
 
       // Acknowledge message
       channel.ack(msg);
-    } catch (error) {
-      console.error("❌ Video processing failed:", error);
+    } catch (error: any) {
+      console.error("❌ Video processing failed:", error.message);
 
       try {
         const job: VideoProcessingMessage = JSON.parse(msg.content.toString());
@@ -140,7 +140,7 @@ export const startVideoProcessingWorker = async (channel: Channel) => {
                 callbackLastAttempt: new Date(),
               });
             }
-          } catch (webhookError) {
+          } catch (webhookError: any) {
             // First retry attempt failed, will be retried by cron job
             updateVideoRecord(job.uploadId, {
               callbackRetryCount: 1,
@@ -148,14 +148,14 @@ export const startVideoProcessingWorker = async (channel: Channel) => {
             });
             console.error(
               "Failed to send failure webhook callback, will retry:",
-              webhookError
+              webhookError.message
             );
           }
         }
-      } catch (parseError) {
+      } catch (parseError: any) {
         console.error(
           "Failed to parse message for error handling:",
-          parseError
+          parseError.message
         );
       }
 
@@ -174,9 +174,11 @@ const cleanupVideoFiles = async (
   uploadId: string,
   originalFilePath: string
 ) => {
+  console.log(`🗑️ Starting cleanup for uploadId: ${uploadId}`);
   const cleanupTasks = [];
 
   // 1. Clean up the original video file from TUS uploads directory
+  console.log(`🗑️ Attempting to cleanup original file: ${originalFilePath}`);
   cleanupTasks.push(
     fs
       .unlink(originalFilePath)
@@ -186,19 +188,22 @@ const cleanupVideoFiles = async (
       .catch((error) =>
         console.warn(
           `⚠️ Failed to cleanup original video file ${originalFilePath}:`,
-          error
+          error.message
         )
       )
   );
 
   // 2. Clean up TUS-related files (metadata files, etc.)
-  const uploadsDir = path.join(process.cwd(), ENV.UPLOAD_PATH);
+  // Use absolute path from process.cwd() instead of __dirname to avoid build path issues
+  const uploadsDir = path.resolve(process.cwd(), ENV.UPLOAD_PATH);
+  console.log(`🗑️ TUS uploads directory: ${uploadsDir}`);
   const tusFiles = [
     path.join(uploadsDir, `${uploadId}.json`), // TUS metadata file
     path.join(uploadsDir, uploadId), // TUS data file (if exists)
   ];
 
   for (const tusFile of tusFiles) {
+    console.log(`🗑️ Attempting to cleanup TUS file: ${tusFile}`);
     cleanupTasks.push(
       fs
         .unlink(tusFile)
@@ -206,14 +211,28 @@ const cleanupVideoFiles = async (
         .catch((error) => {
           // Only log as warning since some files might not exist
           if (error.code !== "ENOENT") {
-            console.warn(`⚠️ Failed to cleanup TUS file ${tusFile}:`, error);
+            console.warn(
+              `⚠️ Failed to cleanup TUS file ${tusFile}:`,
+              error.message
+            );
+          } else {
+            console.log(`🗑️ TUS file not found (already cleaned): ${tusFile}`);
           }
         })
     );
   }
 
   // 3. Clean up processed video files directory (HLS segments, playlist, etc.)
-  const processedVideoDir = path.join(__dirname, `../videos/${uploadId}`);
+  // The video processing creates files in controllers/videos/ directory
+  const processedVideoDir = path.resolve(
+    process.cwd(),
+    "controllers",
+    "videos",
+    uploadId
+  );
+  console.log(
+    `🗑️ Attempting to cleanup processed video directory: ${processedVideoDir}`
+  );
   cleanupTasks.push(
     fs
       .rm(processedVideoDir, { recursive: true, force: true })
@@ -225,11 +244,12 @@ const cleanupVideoFiles = async (
       .catch((error) =>
         console.warn(
           `⚠️ Failed to cleanup processed video directory ${processedVideoDir}:`,
-          error
+          error.message
         )
       )
   );
 
   // Execute all cleanup tasks in parallel
   await Promise.allSettled(cleanupTasks);
+  console.log(`🗑️ Cleanup completed for uploadId: ${uploadId}`);
 };
