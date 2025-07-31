@@ -9,7 +9,6 @@ import { helmetConfig } from "./lib/helmet";
 import v1router from "./router/uploadGroup";
 import { initRabbitMQ } from "./lib/rabbitmq";
 import { createTusServer } from "./lib/tusServer";
-import { callbackCronService } from "./lib/callbackCron";
 import { apiReference } from "@scalar/express-api-reference";
 import generateOpenAPISpec, { apiDocsServer } from "./docs/openapi";
 
@@ -67,9 +66,6 @@ const startServer = async () => {
 
   // Initialize RabbitMQ
   await initRabbitMQ();
-
-  // Start callback cron service
-  callbackCronService.start();
 
   app.listen(ENV.SERVER_PORT, () => {
     Logger.info({ message: `Server is running on port ${ENV.SERVER_PORT}` });
