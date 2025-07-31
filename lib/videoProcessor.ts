@@ -2,8 +2,10 @@ import { Channel } from "amqplib";
 import { transcodeAndUpload } from "../controllers/utils/upload-utils";
 import { updateVideoRecord } from "../lib/videoStore";
 import { RabbitMQQueues } from "../lib/rabbitmq";
+import { ENV } from "../lib/environments";
 import axios from "axios";
 import fs from "fs/promises";
+import path from "path";
 
 export interface VideoProcessingMessage {
   uploadId: string;
@@ -52,17 +54,8 @@ export const startVideoProcessingWorker = async (channel: Channel) => {
 
       console.log(`✅ Video processing completed: ${job.filename}`);
 
-      // Clean up the original video file from disk after successful processing
-      try {
-        await fs.unlink(job.filePath);
-        console.log(`🗑️ Cleaned up original video file: ${job.filePath}`);
-      } catch (cleanupError) {
-        console.warn(
-          `⚠️ Failed to cleanup video file ${job.filePath}:`,
-          cleanupError
-        );
-        // Don't fail the entire process if cleanup fails
-      }
+      // Clean up all related files after successful processing and S3 upload
+      await cleanupVideoFiles(job.uploadId, job.filePath);
 
       // Send webhook callback if provided
       if (job.callbackUrl && updatedRecord) {
@@ -120,18 +113,8 @@ export const startVideoProcessingWorker = async (channel: Channel) => {
           error: error instanceof Error ? error.message : "Processing failed",
         });
 
-        // Clean up the original video file from disk even on failure
-        // to prevent disk space accumulation
-        try {
-          await fs.unlink(job.filePath);
-          console.log(`🗑️ Cleaned up failed video file: ${job.filePath}`);
-        } catch (cleanupError) {
-          console.warn(
-            `⚠️ Failed to cleanup failed video file ${job.filePath}:`,
-            cleanupError
-          );
-          // Don't fail the entire process if cleanup fails
-        }
+        // Clean up all related files even on failure to prevent disk space accumulation
+        await cleanupVideoFiles(job.uploadId, job.filePath);
 
         // Send webhook callback for failure if provided
         if (job.callbackUrl && updatedRecord) {
@@ -182,4 +165,71 @@ export const startVideoProcessingWorker = async (channel: Channel) => {
   });
 
   console.log("🎬 Video processing worker started");
+};
+
+/**
+ * Clean up all files related to a video processing job
+ */
+const cleanupVideoFiles = async (
+  uploadId: string,
+  originalFilePath: string
+) => {
+  const cleanupTasks = [];
+
+  // 1. Clean up the original video file from TUS uploads directory
+  cleanupTasks.push(
+    fs
+      .unlink(originalFilePath)
+      .then(() =>
+        console.log(`🗑️ Cleaned up original video file: ${originalFilePath}`)
+      )
+      .catch((error) =>
+        console.warn(
+          `⚠️ Failed to cleanup original video file ${originalFilePath}:`,
+          error
+        )
+      )
+  );
+
+  // 2. Clean up TUS-related files (metadata files, etc.)
+  const uploadsDir = path.join(process.cwd(), ENV.UPLOAD_PATH);
+  const tusFiles = [
+    path.join(uploadsDir, `${uploadId}.json`), // TUS metadata file
+    path.join(uploadsDir, uploadId), // TUS data file (if exists)
+  ];
+
+  for (const tusFile of tusFiles) {
+    cleanupTasks.push(
+      fs
+        .unlink(tusFile)
+        .then(() => console.log(`🗑️ Cleaned up TUS file: ${tusFile}`))
+        .catch((error) => {
+          // Only log as warning since some files might not exist
+          if (error.code !== "ENOENT") {
+            console.warn(`⚠️ Failed to cleanup TUS file ${tusFile}:`, error);
+          }
+        })
+    );
+  }
+
+  // 3. Clean up processed video files directory (HLS segments, playlist, etc.)
+  const processedVideoDir = path.join(__dirname, `../videos/${uploadId}`);
+  cleanupTasks.push(
+    fs
+      .rm(processedVideoDir, { recursive: true, force: true })
+      .then(() =>
+        console.log(
+          `🗑️ Cleaned up processed video directory: ${processedVideoDir}`
+        )
+      )
+      .catch((error) =>
+        console.warn(
+          `⚠️ Failed to cleanup processed video directory ${processedVideoDir}:`,
+          error
+        )
+      )
+  );
+
+  // Execute all cleanup tasks in parallel
+  await Promise.allSettled(cleanupTasks);
 };
