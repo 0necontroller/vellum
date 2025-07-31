@@ -9,6 +9,8 @@ import { validateUpload, formatValidationErrors } from "./validation";
 export const createTusServer = () => {
   const server = new Server({
     path: "/api/v1/tus",
+    respectForwardedHeaders: true,
+    //maxSize: 500 * 1024 * 1024, // 500MB max upload size
     datastore: new FileStore({
       directory: path.join(process.cwd(), ENV.UPLOAD_PATH),
     }),
