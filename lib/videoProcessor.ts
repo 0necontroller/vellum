@@ -12,6 +12,7 @@ export interface VideoProcessingMessage {
   filename: string;
   packager: "ffmpeg";
   callbackUrl?: string;
+  s3Path?: string;
 }
 
 export const startVideoProcessingWorker = async (channel: Channel) => {
@@ -39,7 +40,8 @@ export const startVideoProcessingWorker = async (channel: Channel) => {
       const streamUrl = await transcodeAndUpload(
         job.filePath,
         job.filename,
-        job.uploadId
+        job.uploadId,
+        job.s3Path
       );
 
       // Update status to completed

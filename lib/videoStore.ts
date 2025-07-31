@@ -17,6 +17,7 @@ export interface VideoRecord {
   callbackStatus: "pending" | "completed" | "failed";
   callbackRetryCount: number;
   callbackLastAttempt?: Date;
+  s3Path?: string; // Custom S3 path for storing the video
 }
 
 // Initialize SQLite database
@@ -43,9 +44,17 @@ db.exec(`
     callbackUrl TEXT,
     callbackStatus TEXT DEFAULT 'pending',
     callbackRetryCount INTEGER DEFAULT 0,
-    callbackLastAttempt TEXT
+    callbackLastAttempt TEXT,
+    s3Path TEXT
   )
 `);
+
+// Add s3Path column if it doesn't exist (for existing databases)
+try {
+  db.exec(`ALTER TABLE videos ADD COLUMN s3Path TEXT`);
+} catch (error) {
+  // Column already exists, ignore error
+}
 
 export const createVideoRecord = (data: Partial<VideoRecord>): VideoRecord => {
   const record: VideoRecord = {
@@ -62,8 +71,8 @@ export const createVideoRecord = (data: Partial<VideoRecord>): VideoRecord => {
   const stmt = db.prepare(`
     INSERT INTO videos (
       id, filename, status, progress, streamUrl, createdAt, completedAt, 
-      error, packager, callbackUrl, callbackStatus, callbackRetryCount, callbackLastAttempt
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      error, packager, callbackUrl, callbackStatus, callbackRetryCount, callbackLastAttempt, s3Path
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   stmt.run(
@@ -79,7 +88,8 @@ export const createVideoRecord = (data: Partial<VideoRecord>): VideoRecord => {
     record.callbackUrl || null,
     record.callbackStatus,
     record.callbackRetryCount,
-    record.callbackLastAttempt?.toISOString() || null
+    record.callbackLastAttempt?.toISOString() || null,
+    record.s3Path || null
   );
 
   return record;
@@ -101,7 +111,7 @@ export const updateVideoRecord = (
     UPDATE videos 
     SET filename = ?, status = ?, progress = ?, streamUrl = ?, 
         completedAt = ?, error = ?, packager = ?, callbackUrl = ?,
-        callbackStatus = ?, callbackRetryCount = ?, callbackLastAttempt = ?
+        callbackStatus = ?, callbackRetryCount = ?, callbackLastAttempt = ?, s3Path = ?
     WHERE id = ?
   `);
 
@@ -117,6 +127,7 @@ export const updateVideoRecord = (
     updatedRecord.callbackStatus,
     updatedRecord.callbackRetryCount,
     updatedRecord.callbackLastAttempt?.toISOString() || null,
+    updatedRecord.s3Path || null,
     id
   );
 

@@ -40,6 +40,10 @@ import { IServerResponse } from "../types/response";
  *           type: string
  *           description: Optional webhook URL for processing completion notifications
  *           example: "https://myapp.com/webhook"
+ *         s3Path:
+ *           type: string
+ *           description: Optional custom S3 path for storing the video (e.g., "/v2/media")
+ *           example: "/v2/media"
  *     VideoUploadSessionResponse:
  *       type: object
  *       properties:
@@ -91,6 +95,10 @@ import { IServerResponse } from "../types/response";
  *         error:
  *           type: string
  *           description: Error message (if failed)
+ *         s3Path:
+ *           type: string
+ *           description: Custom S3 path where the video is stored
+ *           example: "/v2/media"
  */
 
 /**
@@ -156,7 +164,13 @@ export const createVideoUpload = async (
   res: Response<IServerResponse>
 ) => {
   try {
-    const { filename, filesize, packager = "ffmpeg", callbackUrl } = req.body;
+    const {
+      filename,
+      filesize,
+      packager = "ffmpeg",
+      callbackUrl,
+      s3Path,
+    } = req.body;
 
     if (!filename || !filesize) {
       res.status(400).json({
@@ -165,6 +179,31 @@ export const createVideoUpload = async (
         data: null,
       });
       return;
+    }
+
+    // Validate s3Path format if provided
+    if (s3Path && typeof s3Path !== "string") {
+      res.status(400).json({
+        status: "error",
+        message: "s3Path must be a string",
+        data: null,
+      });
+      return;
+    }
+
+    // Clean up s3Path - remove leading/trailing slashes and ensure it's a valid path
+    let cleanS3Path = s3Path;
+    if (cleanS3Path) {
+      cleanS3Path = cleanS3Path.trim();
+      if (cleanS3Path && !cleanS3Path.match(/^[a-zA-Z0-9/_-]+$/)) {
+        res.status(400).json({
+          status: "error",
+          message:
+            "s3Path contains invalid characters. Only alphanumeric, forward slashes, hyphens, and underscores are allowed",
+          data: null,
+        });
+        return;
+      }
     }
 
     const uploadId = uuidv4();
@@ -178,6 +217,7 @@ export const createVideoUpload = async (
       status: "uploading",
       packager,
       callbackUrl,
+      s3Path: cleanS3Path,
     });
 
     res.json({

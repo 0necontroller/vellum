@@ -438,6 +438,11 @@
             "type": "string",
             "description": "Optional webhook URL for processing completion notifications",
             "example": "https://myapp.com/webhook"
+          },
+          "s3Path": {
+            "type": "string",
+            "description": "Optional custom S3 path for storing the video (e.g., \"/v2/media\")",
+            "example": "/v2/media"
           }
         }
       },
@@ -509,6 +514,11 @@
           "error": {
             "type": "string",
             "description": "Error message (if failed)"
+          },
+          "s3Path": {
+            "type": "string",
+            "description": "Custom S3 path where the video is stored",
+            "example": "/v2/media"
           }
         }
       }

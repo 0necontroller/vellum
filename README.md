@@ -1,6 +1,15 @@
 # Vellum
 
-A self-hostable Docker server for video processing. Features TUS direct uploads, FFmpeg-powered transcoding to streamable formats, and S3 storage. Offers optional callbacks for processing completion. Integrate video workflows effortlessly.
+A self-hostable Docker server for video processing. Features TUS direct uploads, FFmpeg-powered transcoding to streamable formats, and S3 storage. Offers optional callbacks "data": {
+"id": "550e8400-e29b-41d4-a716-446655440000",
+"filename": "my-video.mp4",
+"status": "completed", // uploading, processing, completed, failed
+"progress": 100,
+"streamUrl": "http://localhost:9000/video-streams/v2/media/550e8400.../index.m3u8",
+"s3Path": "/v2/media",
+"createdAt": "2025-01-15T10:30:00Z",
+"completedAt": "2025-01-15T10:35:00Z"
+}essing completion. Integrate video workflows effortlessly.
 
 ## 🚀 Features
 
@@ -114,7 +123,8 @@ Authorization: Bearer your_secure_api_key_here
   "filename": "my-video.mp4",
   "filesize": 104857600,
   "packager": "ffmpeg",
-  "callbackUrl": "https://myapp.com/webhook" // optional
+  "callbackUrl": "https://myapp.com/webhook", // optional
+  "s3Path": "/v2/media" // optional - custom S3 path for storing the video
 }
 ```
 
@@ -208,6 +218,33 @@ Monitor webhook delivery status:
 GET /api/v1/video/{uploadId}/callback-status
 Authorization: Bearer your_secure_api_key_here
 ```
+
+### Custom S3 Storage Paths
+
+You can specify a custom path within your S3 bucket where videos should be stored using the `s3Path` parameter when creating an upload session.
+
+**Default behavior** (without s3Path):
+
+- Videos are stored directly in the bucket root: `video-streams/{videoId}/`
+- Stream URL: `http://localhost:9000/video-streams/{videoId}/index.m3u8`
+
+**With custom s3Path** (e.g., `"s3Path": "/v2/media"`):
+
+- Videos are stored under the custom path: `video-streams/v2/media/{videoId}/`
+- Stream URL: `http://localhost:9000/video-streams/v2/media/{videoId}/index.m3u8`
+
+**Path Requirements:**
+
+- Must contain only alphanumeric characters, forward slashes, hyphens, and underscores
+- Leading and trailing slashes are automatically handled
+- Examples: `/v2/media`, `client123/videos`, `year/2025/january`
+
+**Use Cases:**
+
+- **Multi-tenant applications**: `/tenant-{id}/videos`
+- **API versioning**: `/v2/media`, `/v3/content`
+- **Organizational structure**: `/department/marketing/videos`
+- **Date-based organization**: `/2025/january/uploads`
 
 ## 🎬 Video Processing Workflow
 
