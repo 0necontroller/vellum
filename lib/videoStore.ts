@@ -177,6 +177,7 @@ export const getVideosWithPendingCallbacks = (): VideoRecord[] => {
     WHERE callbackUrl IS NOT NULL 
     AND callbackStatus = 'pending' 
     AND callbackRetryCount < 4
+    AND status = 'completed'
     ORDER BY createdAt ASC
   `);
   const rows = stmt.all() as any[];
