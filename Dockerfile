@@ -15,10 +15,10 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 COPY --from=builder /app/build ./build
-COPY package*.json ./
+COPY --from=builder /app/package*.json ./
 RUN npm ci --only=production
 
 ENV NODE_ENV=production
-EXPOSE 8001
+EXPOSE 9005
 
 CMD ["node", "build/app.js"]

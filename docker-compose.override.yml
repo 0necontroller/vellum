@@ -1,5 +1,5 @@
 services:
-  app:
+  stream:
     build:
       dockerfile: Dockerfile.dev
     volumes:
@@ -39,3 +39,6 @@ services:
         mc policy set public local/${S3_BUCKET};
         exit 0;
       "
+
+volumes:
+  minio_data:

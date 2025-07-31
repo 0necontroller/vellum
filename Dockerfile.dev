@@ -12,6 +12,6 @@ RUN npm i -g tsx
 COPY . .
 
 ENV NODE_ENV=development
-EXPOSE 8001
+EXPOSE 9005
 
 CMD ["npm", "run", "dev"]
