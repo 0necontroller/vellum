@@ -8,6 +8,7 @@ import {
 import { IServerResponse } from "../types/response";
 import { ENV } from "../lib/environments";
 import { BUCKET_NAME } from "../lib/s3client";
+import { validateUpload, formatValidationErrors } from "../lib/validation";
 
 /**
  * @openapi
@@ -139,7 +140,7 @@ import { BUCKET_NAME } from "../lib/s3client";
  *                     data:
  *                       $ref: '#/components/schemas/VideoUploadSessionResponse'
  *       400:
- *         description: Invalid request parameters
+ *         description: Invalid request parameters or validation errors
  *         content:
  *           application/json:
  *             schema:
@@ -150,7 +151,7 @@ import { BUCKET_NAME } from "../lib/s3client";
  *                     status:
  *                       example: error
  *                     message:
- *                       example: Missing required fields
+ *                       example: File size (150MB) exceeds maximum allowed size (100MB)
  *       401:
  *         description: Unauthorized - Invalid or missing Bearer token
  *         content:
@@ -182,6 +183,17 @@ export const createVideoUpload = async (
       res.status(400).json({
         status: "error",
         message: "Missing required fields: filename and filesize",
+        data: null,
+      });
+      return;
+    }
+
+    // Validate upload constraints (file size, type, and max files)
+    const validationResult = validateUpload(filename, filesize);
+    if (!validationResult.isValid) {
+      res.status(400).json({
+        status: "error",
+        message: formatValidationErrors(validationResult.errors),
         data: null,
       });
       return;

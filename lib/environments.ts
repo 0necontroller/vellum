@@ -5,7 +5,8 @@ export const ENV = {
   UPLOAD_PATH: process.env.UPLOAD_PATH || "./uploads",
   MAX_FILE_SIZE: process.env.MAX_FILE_SIZE || "100mb",
   ALLOWED_FILE_TYPES: (
-    process.env.ALLOWED_FILE_TYPES || "video/mp4,video/avi,video/mov,video/mkv"
+    process.env.ALLOWED_FILE_TYPES ||
+    "video/mp4,video/webm,video/quicktime,video/x-matroska"
   ).split(","),
   MAX_FILES: parseInt(process.env.MAX_FILES || "10", 10),
   S3_ACCESS_KEY: process.env.S3_ACCESS_KEY || "minio",
