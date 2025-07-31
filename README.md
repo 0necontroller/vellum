@@ -122,7 +122,6 @@ Authorization: Bearer your_secure_api_key_here
 {
   "filename": "my-video.mp4",
   "filesize": 104857600,
-  "packager": "ffmpeg",
   "callbackUrl": "https://myapp.com/webhook", // optional
   "s3Path": "/v2/media" // optional - custom S3 path for storing the video
 }
@@ -137,10 +136,18 @@ Response:
   "data": {
     "uploadId": "550e8400-e29b-41d4-a716-446655440000",
     "uploadUrl": "http://localhost:8001/api/v1/tus/files/550e8400-e29b-41d4-a716-446655440000",
+    "videoUrl": "http://localhost:9000/video-streams/v2/media/550e8400-e29b-41d4-a716-446655440000/index.m3u8",
     "expiresIn": 3600
   }
 }
 ```
+
+**Response Fields:**
+
+- `uploadId`: Unique identifier for the upload session
+- `uploadUrl`: TUS endpoint URL for uploading the video file
+- `videoUrl`: Future HLS streaming URL where the processed video will be available (constructed using s3Path if provided)
+- `expiresIn`: Upload session expiration time in seconds
 
 #### 2. Upload Video File
 
@@ -394,4 +401,4 @@ docker-compose logs -f
 
 ## 📄 License
 
-This project is licensed under the ISC License.
+This project is licensed under the MIT License.

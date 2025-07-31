@@ -3,7 +3,7 @@ import cors from "cors";
 import helmet from "helmet";
 import express from "express";
 import { Borgen, Logger } from "borgen";
-import { ENV } from "./lib/environments";
+import { allowedOrigins, ENV } from "./lib/environments";
 import cookieParser from "cookie-parser";
 import { helmetConfig } from "./lib/helmet";
 import v1router from "./router/uploadGroup";
@@ -12,8 +12,6 @@ import { createTusServer } from "./lib/tusServer";
 import { callbackCronService } from "./lib/callbackCron";
 import { apiReference } from "@scalar/express-api-reference";
 import generateOpenAPISpec, { apiDocsServer } from "./docs/openapi";
-
-export const allowedOrigins = ["http://localhost:8001"];
 
 const app = express();
 

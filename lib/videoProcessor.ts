@@ -4,7 +4,6 @@ import { updateVideoRecord } from "../lib/videoStore";
 import { RabbitMQQueues } from "../lib/rabbitmq";
 import axios from "axios";
 import fs from "fs/promises";
-import path from "path";
 
 export interface VideoProcessingMessage {
   uploadId: string;

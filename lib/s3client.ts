@@ -1,16 +1,14 @@
 import {
   S3Client,
-  PutObjectCommand,
   DeleteObjectCommand,
   GetObjectCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { ENV } from "./environments";
-import path from "path";
 
 // Initialize S3 client with MinIO configuration
 const s3Client = new S3Client({
-  region: "us-east-1",
+  region: ENV.S3_REGION,
   endpoint: ENV.S3_ENDPOINT,
   credentials: {
     accessKeyId: ENV.S3_ACCESS_KEY,

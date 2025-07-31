@@ -40,7 +40,7 @@ export const createTusServer = () => {
         uploadId: uploadId,
         filePath: upload.storage?.path,
         filename: upload.metadata?.filename || videoRecord.filename,
-        packager: upload.metadata?.packager || videoRecord.packager || "ffmpeg",
+        packager: "ffmpeg",
         callbackUrl: videoRecord.callbackUrl,
         s3Path: videoRecord.s3Path,
       });

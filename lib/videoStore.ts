@@ -58,7 +58,7 @@ try {
 
 export const createVideoRecord = (data: Partial<VideoRecord>): VideoRecord => {
   const record: VideoRecord = {
-    id: data.id || uuidv4(),
+    id: data.id as string,
     filename: data.filename || "",
     status: "uploading",
     progress: 0,
@@ -177,6 +177,7 @@ export const getVideosWithPendingCallbacks = (): VideoRecord[] => {
     WHERE callbackUrl IS NOT NULL 
     AND callbackStatus = 'pending' 
     AND callbackRetryCount < 4
+    AND status = 'completed'
     ORDER BY createdAt ASC
   `);
   const rows = stmt.all() as any[];

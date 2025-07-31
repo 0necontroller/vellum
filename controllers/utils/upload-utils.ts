@@ -2,11 +2,7 @@ import fs from "fs";
 import path from "path";
 import { execSync } from "child_process";
 import { ENV } from "../../lib/environments";
-import {
-  s3Client,
-  BUCKET_NAME,
-  STREAMING_CONTENT_TYPES,
-} from "../../lib/s3client";
+import { s3Client, BUCKET_NAME } from "../../lib/s3client";
 import {
   PutObjectCommand,
   GetObjectCommand,
@@ -26,6 +22,75 @@ export interface VideoProcessingJob {
 
 export const processVideoAsync = async (job: VideoProcessingJob) => {
   await publishToQueue(RabbitMQQueues.VIDEO_PROCESSING, job);
+};
+
+// Function to upload files recursively (for handling subdirectories)
+async function uploadFile(dirPath: string, prefix: string) {
+  const files = fs.readdirSync(dirPath);
+
+  for (const file of files) {
+    const filePath = path.join(dirPath, file);
+    const stats = fs.statSync(filePath);
+
+    if (stats.isDirectory()) {
+      // Create a new prefix for the subdirectory and recurse
+      const newPrefix = `${prefix}/${file}`;
+      await uploadFile(filePath, newPrefix);
+    } else {
+      // Upload the file
+      const data = fs.readFileSync(filePath);
+
+      // Determine content type based on file extension
+      let contentType;
+      if (file.endsWith(".m3u8")) {
+        contentType = "application/vnd.apple.mpegurl";
+      } else if (file.endsWith(".ts")) {
+        contentType = "video/MP2T";
+      } else if (file.endsWith(".mp4")) {
+        contentType = "video/mp4";
+      } else if (file.endsWith(".m4s")) {
+        contentType = "video/iso.segment";
+      } else if (file.endsWith(".mpd")) {
+        contentType = "application/dash+xml";
+      } else if (file.endsWith(".vtt")) {
+        contentType = "text/vtt";
+      } else {
+        contentType = "application/octet-stream";
+      }
+
+      const key = `${prefix}/${file}`;
+      await s3Client.send(
+        new PutObjectCommand({
+          Bucket: BUCKET_NAME,
+          Key: key,
+          Body: data,
+          ContentType: contentType,
+          ACL: "public-read",
+        })
+      );
+      console.log(`Uploaded: ${key}`);
+    }
+  }
+}
+
+const listFiles = (dir: string, indent = "") => {
+  if (!fs.existsSync(dir)) {
+    console.log(`${indent}Directory not found: ${dir}`);
+    return;
+  }
+
+  const items = fs.readdirSync(dir);
+  items.forEach((item) => {
+    const itemPath = path.join(dir, item);
+    const stats = fs.statSync(itemPath);
+    if (stats.isDirectory()) {
+      console.log(`${indent}📁 ${item}/`);
+      listFiles(itemPath, indent + "  ");
+    } else {
+      const size = (stats.size / (1024 * 1024)).toFixed(2);
+      console.log(`${indent}📄 ${item} (${size} MB)`);
+    }
+  });
 };
 
 export async function transcodeAndUpload(
@@ -80,77 +145,10 @@ export async function transcodeAndUpload(
 
     // List the output files for verification
     console.log("Generated files:");
-    const listFiles = (dir: string, indent = "") => {
-      if (!fs.existsSync(dir)) {
-        console.log(`${indent}Directory not found: ${dir}`);
-        return;
-      }
-
-      const items = fs.readdirSync(dir);
-      items.forEach((item) => {
-        const itemPath = path.join(dir, item);
-        const stats = fs.statSync(itemPath);
-        if (stats.isDirectory()) {
-          console.log(`${indent}📁 ${item}/`);
-          listFiles(itemPath, indent + "  ");
-        } else {
-          const size = (stats.size / (1024 * 1024)).toFixed(2);
-          console.log(`${indent}📄 ${item} (${size} MB)`);
-        }
-      });
-    };
     listFiles(outputDir);
   } catch (error) {
     console.error("Error during transcoding with FFmpeg:", error);
     throw new Error("Failed to transcode video with FFmpeg");
-  }
-
-  // Function to upload files recursively (for handling subdirectories)
-  async function uploadFile(dirPath: string, prefix: string) {
-    const files = fs.readdirSync(dirPath);
-
-    for (const file of files) {
-      const filePath = path.join(dirPath, file);
-      const stats = fs.statSync(filePath);
-
-      if (stats.isDirectory()) {
-        // Create a new prefix for the subdirectory and recurse
-        const newPrefix = `${prefix}/${file}`;
-        await uploadFile(filePath, newPrefix);
-      } else {
-        // Upload the file
-        const data = fs.readFileSync(filePath);
-
-        // Determine content type based on file extension
-        let contentType;
-        if (file.endsWith(".m3u8")) {
-          contentType = "application/vnd.apple.mpegurl";
-        } else if (file.endsWith(".ts")) {
-          contentType = "video/MP2T";
-        } else if (file.endsWith(".mp4")) {
-          contentType = "video/mp4";
-        } else if (file.endsWith(".m4s")) {
-          contentType = "video/iso.segment";
-        } else if (file.endsWith(".mpd")) {
-          contentType = "application/dash+xml";
-        } else if (file.endsWith(".vtt")) {
-          contentType = "text/vtt";
-        } else {
-          contentType = "application/octet-stream";
-        }
-
-        const key = `${prefix}/${file}`;
-        await s3Client.send(
-          new PutObjectCommand({
-            Bucket: BUCKET_NAME,
-            Key: key,
-            Body: data,
-            ContentType: contentType,
-          })
-        );
-        console.log(`Uploaded: ${key}`);
-      }
-    }
   }
 
   // Start the recursive upload
@@ -173,6 +171,7 @@ export async function transcodeAndUpload(
       Key: `${s3Prefix}/metadata.json`,
       Body: JSON.stringify(metadata, null, 2),
       ContentType: "application/json",
+      ACL: "public-read",
     })
   );
 
