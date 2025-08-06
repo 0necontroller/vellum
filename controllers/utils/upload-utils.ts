@@ -150,7 +150,7 @@ export async function transcodeAndUpload(
     }
 
     // Verify essential files exist
-    const masterPlaylist = path.join(outputDir, "index.m3u8");
+    const masterPlaylist = path.join(outputDir, "master.m3u8");
     if (!fs.existsSync(masterPlaylist)) {
       throw new Error(`Master playlist file not found at ${masterPlaylist}`);
     }
@@ -187,7 +187,7 @@ export async function transcodeAndUpload(
     })
   );
 
-  return `${ENV.S3_ENDPOINT}/${BUCKET_NAME}/${s3Prefix}/index.m3u8`;
+  return `${ENV.S3_ENDPOINT}/${BUCKET_NAME}/${s3Prefix}/master.m3u8`;
 }
 
 // Interface for video information
@@ -213,7 +213,7 @@ export async function listVideos(): Promise<VideoInfo[]> {
     // Create a list of promises that fetch metadata for each video
     const videoInfoPromises = folders.map(async (folder) => {
       const videoInfo: VideoInfo = {
-        url: `${ENV.S3_ENDPOINT}/${BUCKET_NAME}/${folder}/index.m3u8`,
+        url: `${ENV.S3_ENDPOINT}/${BUCKET_NAME}/${folder}/master.m3u8`,
         name: folder,
       };
 
