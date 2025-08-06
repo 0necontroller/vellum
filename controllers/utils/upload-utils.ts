@@ -113,23 +113,12 @@ export async function transcodeAndUpload(
     updateVideoRecord(uploadId, { progress: 25 });
   }
 
-  // Use FFmpeg for transcoding with multiple quality streams
+  // Use FFmpeg for transcoding
   const cmd = `ffmpeg -i "${localPath}" \
-    -filter_complex "[0:v]split=2[v1][v2]; \
-    [v1]scale=w=640:h=360:force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2[v360]; \
-    [v2]scale=w=1280:h=720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2[v720]" \
-    -map "[v360]" -map 0:a -c:v libx264 -b:v 800k -preset veryfast -c:a aac -b:a 96k \
-    -map "[v720]" -map 0:a -c:v libx264 -b:v 2500k -preset veryfast -c:a aac -b:a 128k \
-    -f hls \
-    -hls_time 4 \
-    -hls_playlist_type vod \
-    -hls_flags independent_segments \
-    -master_pl_name "master.m3u8" \
-    -var_stream_map "v:0,a:0,name:360p v:1,a:1,name:720p" \
-    -hls_segment_filename "${outputDir}/%v/segment_%03d.ts" \
-    "${outputDir}/%v/index.m3u8"`;
+    -profile:v baseline -level 3.0 -start_number 0 \
+    -hls_time 3 -hls_list_size 0 -f hls "${outputDir}/index.m3u8"`;
 
-  console.log("Using FFmpeg to transcode video with multiple quality streams");
+  console.log("Using FFmpeg to transcode video");
 
   try {
     console.log("Starting transcoding with FFmpeg...");
@@ -150,7 +139,7 @@ export async function transcodeAndUpload(
     }
 
     // Verify essential files exist
-    const masterPlaylist = path.join(outputDir, "master.m3u8");
+    const masterPlaylist = path.join(outputDir, "index.m3u8");
     if (!fs.existsSync(masterPlaylist)) {
       throw new Error(`Master playlist file not found at ${masterPlaylist}`);
     }
@@ -187,7 +176,7 @@ export async function transcodeAndUpload(
     })
   );
 
-  return `${ENV.S3_ENDPOINT}/${BUCKET_NAME}/${s3Prefix}/master.m3u8`;
+  return `${ENV.S3_ENDPOINT}/${BUCKET_NAME}/${s3Prefix}/index.m3u8`;
 }
 
 // Interface for video information
@@ -213,7 +202,7 @@ export async function listVideos(): Promise<VideoInfo[]> {
     // Create a list of promises that fetch metadata for each video
     const videoInfoPromises = folders.map(async (folder) => {
       const videoInfo: VideoInfo = {
-        url: `${ENV.S3_ENDPOINT}/${BUCKET_NAME}/${folder}/master.m3u8`,
+        url: `${ENV.S3_ENDPOINT}/${BUCKET_NAME}/${folder}/index.m3u8`,
         name: folder,
       };
 
