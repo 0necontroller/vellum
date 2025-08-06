@@ -240,7 +240,7 @@ export const createVideoUpload = async (
     const s3Prefix = cleanS3Path
       ? `${cleanS3Path.replace(/^\/|\/$/g, "")}/${uploadId}`
       : uploadId;
-    const videoUrl = `${ENV.S3_ENDPOINT}/${BUCKET_NAME}/${s3Prefix}/index.m3u8`;
+    const videoUrl = `${ENV.S3_ENDPOINT}/${BUCKET_NAME}/${s3Prefix}/master.m3u8`;
 
     res.json({
       status: "success",
