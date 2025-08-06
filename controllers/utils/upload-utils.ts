@@ -113,12 +113,23 @@ export async function transcodeAndUpload(
     updateVideoRecord(uploadId, { progress: 25 });
   }
 
-  // Use FFmpeg for transcoding
+  // Use FFmpeg for transcoding with multiple quality streams
   const cmd = `ffmpeg -i "${localPath}" \
-    -profile:v baseline -level 3.0 -start_number 0 \
-    -hls_time 10 -hls_list_size 0 -f hls "${outputDir}/index.m3u8"`;
+    -filter_complex "[0:v]split=2[v1][v2]; \
+    [v1]scale=w=640:h=360:force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2[v360]; \
+    [v2]scale=w=1280:h=720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2[v720]" \
+    -map "[v360]" -map 0:a -c:v libx264 -b:v 800k -preset veryfast -c:a aac -b:a 96k \
+    -map "[v720]" -map 0:a -c:v libx264 -b:v 2500k -preset veryfast -c:a aac -b:a 128k \
+    -f hls \
+    -hls_time 4 \
+    -hls_playlist_type vod \
+    -hls_flags independent_segments \
+    -master_pl_name "master.m3u8" \
+    -var_stream_map "v:0,a:0,name:360p v:1,a:1,name:720p" \
+    -hls_segment_filename "${outputDir}/%v/segment_%03d.ts" \
+    "${outputDir}/%v/index.m3u8"`;
 
-  console.log("Using FFmpeg to transcode video");
+  console.log("Using FFmpeg to transcode video with multiple quality streams");
 
   try {
     console.log("Starting transcoding with FFmpeg...");
