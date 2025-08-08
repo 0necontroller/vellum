@@ -19,8 +19,12 @@ services:
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
+      # Increase heartbeat timeout for long-running processes
+      RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: "-rabbit heartbeat 60"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
+      # Add custom rabbitmq configuration
+      - ./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
     restart: always
     networks:
       - vellum-network

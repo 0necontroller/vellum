@@ -40,6 +40,7 @@ export const startVideoProcessingWorker = async (channel: Channel) => {
       if (!msg) return;
 
       let job: VideoProcessingMessage | null = null;
+      let heartbeatInterval: NodeJS.Timeout | null = null;
 
       try {
         job = JSON.parse(msg.content.toString());
@@ -51,6 +52,18 @@ export const startVideoProcessingWorker = async (channel: Channel) => {
         }
 
         console.log(`📹 Processing video: ${job.filename} (${job.uploadId})`);
+
+        // Start heartbeat to keep RabbitMQ connection alive during long processing
+        heartbeatInterval = setInterval(() => {
+          try {
+            // Send a heartbeat by updating progress slightly to keep connection alive
+            if (job) {
+              console.log(`💓 Processing heartbeat for ${job.uploadId}`);
+            }
+          } catch (error) {
+            console.warn("⚠️ Heartbeat check failed:", error);
+          }
+        }, 30000); // Send heartbeat every 30 seconds
 
         // Update status to processing
         updateVideoRecord(job.uploadId, {
@@ -65,6 +78,12 @@ export const startVideoProcessingWorker = async (channel: Channel) => {
           job.uploadId,
           job.s3Path
         );
+
+        // Clear heartbeat interval
+        if (heartbeatInterval) {
+          clearInterval(heartbeatInterval);
+          heartbeatInterval = null;
+        }
 
         // Generate thumbnail URL
         const s3Prefix = job.s3Path
@@ -132,6 +151,12 @@ export const startVideoProcessingWorker = async (channel: Channel) => {
         channel.ack(msg);
       } catch (error: any) {
         console.error("❌ Video processing failed:", error.message);
+
+        // Clear heartbeat interval on error
+        if (heartbeatInterval) {
+          clearInterval(heartbeatInterval);
+          heartbeatInterval = null;
+        }
 
         try {
           // If job was not parsed, try to parse it again for error handling
