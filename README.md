@@ -36,7 +36,7 @@ Copy the example environment file and customize it:
 cp .env.example .env
 ```
 
-Edit `.env` with your preferred settings:
+Edit `.env` with your environments:
 
 ```bash
 # Server Configuration
