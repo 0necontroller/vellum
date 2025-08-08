@@ -1,15 +1,6 @@
 # Vellum
 
-A self-hostable Docker server for video processing. Features TUS direct uploads, FFmpeg-powered transcoding to streamable formats, and S3 storage. Offers optional callbacks "data": {
-"id": "550e8400-e29b-41d4-a716-446655440000",
-"filename": "my-video.mp4",
-"status": "completed", // uploading, processing, completed, failed
-"progress": 100,
-"streamUrl": "http://localhost:9000/video-streams/v2/media/550e8400.../index.m3u8",
-"s3Path": "/v2/media",
-"createdAt": "2025-01-15T10:30:00Z",
-"completedAt": "2025-01-15T10:35:00Z"
-}essing completion. Integrate video workflows effortlessly.
+Vellum is a pluggable video processing server that can be easily integrated into any application. It provides a Docker-based solution for handling video uploads, processing, and streaming with support for resumable uploads using TUS protocol.
 
 ## 🚀 Features
 
