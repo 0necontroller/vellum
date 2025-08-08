@@ -17,122 +17,83 @@ export interface VideoProcessingMessage {
 }
 
 export const startVideoProcessingWorker = async (channel: Channel) => {
-  console.log("🎬 Starting video processing worker...");
+  try {
+    console.log("🎬 Starting video processing worker...");
 
-  await channel.assertQueue(RabbitMQQueues.VIDEO_PROCESSING, { durable: true });
+    await channel.assertQueue(RabbitMQQueues.VIDEO_PROCESSING, {
+      durable: true,
+    });
 
-  // Set prefetch to 1 to process one video at a time
-  channel.prefetch(1);
+    // Set prefetch to 1 to process one video at a time
+    channel.prefetch(1);
 
-  channel.consume(RabbitMQQueues.VIDEO_PROCESSING, async (msg) => {
-    if (!msg) return;
+    // Add channel error handlers to prevent crashes
+    channel.on("error", (err) => {
+      console.error("❌ Video processing channel error:", err.message);
+    });
 
-    try {
-      const job: VideoProcessingMessage = JSON.parse(msg.content.toString());
-      console.log(`📹 Processing video: ${job.filename} (${job.uploadId})`);
+    channel.on("close", () => {
+      console.warn("⚠️ Video processing channel closed");
+    });
 
-      // Update status to processing
-      updateVideoRecord(job.uploadId, {
-        status: "processing",
-        progress: 10,
-      });
+    channel.consume(RabbitMQQueues.VIDEO_PROCESSING, async (msg) => {
+      if (!msg) return;
 
-      // Process the video
-      const streamUrl = await transcodeAndUpload(
-        job.filePath,
-        job.filename,
-        job.uploadId,
-        job.s3Path
-      );
-
-      // Generate thumbnail URL
-      const s3Prefix = job.s3Path
-        ? `${job.s3Path.replace(/^\/|\/$/g, "")}/${job.uploadId}`
-        : job.uploadId;
-      const thumbnailUrl = `${ENV.S3_BUCKET}.${ENV.S3_ENDPOINT}/${s3Prefix}/thumbnail.jpg`;
-
-      // Update status to completed
-      const updatedRecord = updateVideoRecord(job.uploadId, {
-        status: "completed",
-        progress: 100,
-        streamUrl,
-        thumbnailUrl,
-      });
-
-      console.log(`✅ Video processing completed: ${job.filename}`);
-
-      // Clean up all related files after successful processing and S3 upload
-      await cleanupVideoFiles(job.uploadId, job.filePath);
-
-      // Send webhook callback if provided
-      if (job.callbackUrl && updatedRecord) {
-        try {
-          const response = await axios.post(job.callbackUrl, {
-            videoId: job.uploadId,
-            filename: job.filename,
-            status: "completed",
-            streamUrl,
-            thumbnailUrl,
-          });
-
-          if (response.status === 200) {
-            // Update callback status to completed
-            updateVideoRecord(job.uploadId, {
-              callbackStatus: "completed",
-              callbackLastAttempt: new Date(),
-            });
-            console.log(
-              `📞 Webhook callback sent successfully to: ${job.callbackUrl}`
-            );
-          } else {
-            // First retry attempt failed, will be retried by cron job
-            updateVideoRecord(job.uploadId, {
-              callbackRetryCount: 1,
-              callbackLastAttempt: new Date(),
-            });
-            console.log(
-              `⚠️ Webhook callback failed with status ${response.status}, will retry`
-            );
-          }
-        } catch (webhookError: any) {
-          // First retry attempt failed, will be retried by cron job
-          updateVideoRecord(job.uploadId, {
-            callbackRetryCount: 1,
-            callbackLastAttempt: new Date(),
-          });
-          console.error(
-            "Failed to send webhook callback, will retry:",
-            webhookError.message
-          );
-        }
-      }
-
-      // Acknowledge message
-      channel.ack(msg);
-    } catch (error: any) {
-      console.error("❌ Video processing failed:", error.message);
+      let job: VideoProcessingMessage | null = null;
 
       try {
-        const job: VideoProcessingMessage = JSON.parse(msg.content.toString());
+        job = JSON.parse(msg.content.toString());
 
-        // Update status to failed
-        const updatedRecord = updateVideoRecord(job.uploadId, {
-          status: "failed",
-          error: error instanceof Error ? error.message : "Processing failed",
+        if (!job) {
+          console.error("❌ Failed to parse job message");
+          channel.ack(msg);
+          return;
+        }
+
+        console.log(`📹 Processing video: ${job.filename} (${job.uploadId})`);
+
+        // Update status to processing
+        updateVideoRecord(job.uploadId, {
+          status: "processing",
+          progress: 10,
         });
 
-        // Clean up all related files even on failure to prevent disk space accumulation
+        // Process the video
+        const streamUrl = await transcodeAndUpload(
+          job.filePath,
+          job.filename,
+          job.uploadId,
+          job.s3Path
+        );
+
+        // Generate thumbnail URL
+        const s3Prefix = job.s3Path
+          ? `${job.s3Path.replace(/^\/|\/$/g, "")}/${job.uploadId}`
+          : job.uploadId;
+        const thumbnailUrl = `${ENV.S3_BUCKET}.${ENV.S3_ENDPOINT}/${s3Prefix}/thumbnail.jpg`;
+
+        // Update status to completed
+        const updatedRecord = updateVideoRecord(job.uploadId, {
+          status: "completed",
+          progress: 100,
+          streamUrl,
+          thumbnailUrl,
+        });
+
+        console.log(`✅ Video processing completed: ${job.filename}`);
+
+        // Clean up all related files after successful processing and S3 upload
         await cleanupVideoFiles(job.uploadId, job.filePath);
 
-        // Send webhook callback for failure if provided
+        // Send webhook callback if provided
         if (job.callbackUrl && updatedRecord) {
           try {
             const response = await axios.post(job.callbackUrl, {
               videoId: job.uploadId,
               filename: job.filename,
-              status: "failed",
-              error:
-                error instanceof Error ? error.message : "Processing failed",
+              status: "completed",
+              streamUrl,
+              thumbnailUrl,
             });
 
             if (response.status === 200) {
@@ -141,12 +102,18 @@ export const startVideoProcessingWorker = async (channel: Channel) => {
                 callbackStatus: "completed",
                 callbackLastAttempt: new Date(),
               });
+              console.log(
+                `📞 Webhook callback sent successfully to: ${job.callbackUrl}`
+              );
             } else {
               // First retry attempt failed, will be retried by cron job
               updateVideoRecord(job.uploadId, {
                 callbackRetryCount: 1,
                 callbackLastAttempt: new Date(),
               });
+              console.log(
+                `⚠️ Webhook callback failed with status ${response.status}, will retry`
+              );
             }
           } catch (webhookError: any) {
             // First retry attempt failed, will be retried by cron job
@@ -155,26 +122,93 @@ export const startVideoProcessingWorker = async (channel: Channel) => {
               callbackLastAttempt: new Date(),
             });
             console.error(
-              "Failed to send failure webhook callback, will retry:",
+              "Failed to send webhook callback, will retry:",
               webhookError.message
             );
           }
         }
-      } catch (parseError: any) {
-        console.error(
-          "Failed to parse message for error handling:",
-          parseError.message
-        );
+
+        // Acknowledge message
+        channel.ack(msg);
+      } catch (error: any) {
+        console.error("❌ Video processing failed:", error.message);
+
+        try {
+          // If job was not parsed, try to parse it again for error handling
+          if (!job) {
+            job = JSON.parse(msg.content.toString());
+          }
+
+          if (job) {
+            // Update status to failed
+            const updatedRecord = updateVideoRecord(job.uploadId, {
+              status: "failed",
+              error:
+                error instanceof Error ? error.message : "Processing failed",
+            });
+
+            // Clean up all related files even on failure to prevent disk space accumulation
+            await cleanupVideoFiles(job.uploadId, job.filePath);
+
+            // Send webhook callback for failure if provided
+            if (job.callbackUrl && updatedRecord) {
+              try {
+                const response = await axios.post(job.callbackUrl, {
+                  videoId: job.uploadId,
+                  filename: job.filename,
+                  status: "failed",
+                  error:
+                    error instanceof Error
+                      ? error.message
+                      : "Processing failed",
+                });
+
+                if (response.status === 200) {
+                  // Update callback status to completed
+                  updateVideoRecord(job.uploadId, {
+                    callbackStatus: "completed",
+                    callbackLastAttempt: new Date(),
+                  });
+                } else {
+                  // First retry attempt failed, will be retried by cron job
+                  updateVideoRecord(job.uploadId, {
+                    callbackRetryCount: 1,
+                    callbackLastAttempt: new Date(),
+                  });
+                }
+              } catch (webhookError: any) {
+                // First retry attempt failed, will be retried by cron job
+                updateVideoRecord(job.uploadId, {
+                  callbackRetryCount: 1,
+                  callbackLastAttempt: new Date(),
+                });
+                console.error(
+                  "Failed to send failure webhook callback, will retry:",
+                  webhookError.message
+                );
+              }
+            }
+          } else {
+            console.error("❌ Could not parse job for error handling");
+          }
+        } catch (parseError: any) {
+          console.error(
+            "Failed to parse message for error handling:",
+            parseError.message
+          );
+        }
+
+        // Acknowledge message even on failure to prevent infinite retry
+        channel.ack(msg);
       }
+    });
 
-      // Acknowledge message even on failure to prevent infinite retry
-      channel.ack(msg);
-    }
-  });
-
-  console.log("🎬 Video processing worker started");
+    console.log("🎬 Video processing worker started");
+  } catch (error: any) {
+    console.error("❌ Failed to start video processing worker:", error.message);
+    throw error;
+  }
 };
-
 /**
  * Clean up all files related to a video processing job
  */
