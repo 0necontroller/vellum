@@ -1,6 +1,10 @@
 import { Channel } from "amqplib";
 import { transcodeAndUpload } from "../controllers/utils/upload-utils";
-import { updateVideoRecord } from "../lib/videoStore";
+import {
+  updateVideoRecord,
+  getVideoRecord,
+  safelyTransitionToProcessing,
+} from "../lib/videoStore";
 import { RabbitMQQueues } from "../lib/rabbitmq";
 import { ENV } from "../lib/environments";
 import axios from "axios";
@@ -41,6 +45,7 @@ export const startVideoProcessingWorker = async (channel: Channel) => {
 
       let job: VideoProcessingMessage | null = null;
       let heartbeatInterval: NodeJS.Timeout | null = null;
+      let messageAcknowledged = false;
 
       try {
         job = JSON.parse(msg.content.toString());
@@ -48,10 +53,44 @@ export const startVideoProcessingWorker = async (channel: Channel) => {
         if (!job) {
           console.error("❌ Failed to parse job message");
           channel.ack(msg);
+          messageAcknowledged = true;
           return;
         }
 
         console.log(`📹 Processing video: ${job.filename} (${job.uploadId})`);
+
+        // Safely transition to processing status with atomic database operation
+        const transitionResult = safelyTransitionToProcessing(job.uploadId);
+
+        if (!transitionResult.success) {
+          if (transitionResult.record?.status === "processing") {
+            console.log(
+              `⚠️ Video ${job.uploadId} is already being processed by another worker, skipping...`
+            );
+          } else if (transitionResult.record?.status === "completed") {
+            console.log(
+              `✅ Video ${job.uploadId} is already completed, skipping...`
+            );
+          } else {
+            console.log(
+              `⚠️ Video ${job.uploadId} cannot be transitioned to processing (current status: ${transitionResult.record?.status}), skipping...`
+            );
+          }
+          channel.ack(msg);
+          messageAcknowledged = true;
+          return;
+        }
+
+        console.log(
+          `🚀 Successfully transitioned video ${job.uploadId} to processing status`
+        );
+
+        // Acknowledge the message early to prevent reprocessing if connection drops
+        channel.ack(msg);
+        messageAcknowledged = true;
+        console.log(
+          `📝 Message acknowledged early for ${job.uploadId} to prevent duplicate processing`
+        );
 
         // Start heartbeat to keep RabbitMQ connection alive during long processing
         heartbeatInterval = setInterval(() => {
@@ -64,12 +103,6 @@ export const startVideoProcessingWorker = async (channel: Channel) => {
             console.warn("⚠️ Heartbeat check failed:", error);
           }
         }, 30000); // Send heartbeat every 30 seconds
-
-        // Update status to processing
-        updateVideoRecord(job.uploadId, {
-          status: "processing",
-          progress: 10,
-        });
 
         // Process the video
         const streamUrl = await transcodeAndUpload(
@@ -147,8 +180,7 @@ export const startVideoProcessingWorker = async (channel: Channel) => {
           }
         }
 
-        // Acknowledge message
-        channel.ack(msg);
+        // Message was already acknowledged early, so no need to ack here
       } catch (error: any) {
         console.error("❌ Video processing failed:", error.message);
 
@@ -156,6 +188,24 @@ export const startVideoProcessingWorker = async (channel: Channel) => {
         if (heartbeatInterval) {
           clearInterval(heartbeatInterval);
           heartbeatInterval = null;
+        }
+
+        // If we haven't acknowledged the message yet, ack it now to prevent redelivery
+        if (!messageAcknowledged && msg) {
+          try {
+            channel.ack(msg);
+            messageAcknowledged = true;
+            console.log(
+              `📝 Message acknowledged on error for ${
+                job?.uploadId || "unknown"
+              }`
+            );
+          } catch (ackError) {
+            console.warn(
+              "⚠️ Failed to acknowledge message on error:",
+              ackError
+            );
+          }
         }
 
         try {
@@ -223,8 +273,7 @@ export const startVideoProcessingWorker = async (channel: Channel) => {
           );
         }
 
-        // Acknowledge message even on failure to prevent infinite retry
-        channel.ack(msg);
+        // Message was already acknowledged early, so no need to ack here again
       }
     });
 

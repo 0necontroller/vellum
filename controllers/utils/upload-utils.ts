@@ -10,7 +10,7 @@ import {
   ListObjectsV2Command,
 } from "@aws-sdk/client-s3";
 import { publishToQueue, RabbitMQQueues } from "../../lib/rabbitmq";
-import { updateVideoRecord } from "../../lib/videoStore";
+import { updateVideoRecord, getVideoRecord } from "../../lib/videoStore";
 
 export interface VideoProcessingJob {
   uploadId: string;
@@ -145,6 +145,26 @@ export async function transcodeAndUpload(
 ) {
   const name = uploadId || path.parse(filename).name;
 
+  // Double-check if this video is already completed to prevent re-processing
+  if (uploadId) {
+    const currentRecord = getVideoRecord(uploadId);
+    if (currentRecord && currentRecord.status === "completed") {
+      console.log(
+        `✅ Video ${uploadId} is already completed, skipping transcoding...`
+      );
+      return currentRecord.streamUrl || "";
+    }
+    if (currentRecord && currentRecord.status === "failed") {
+      console.log(`🔄 Video ${uploadId} previously failed, retrying...`);
+      // Reset status to processing for retry
+      updateVideoRecord(uploadId, {
+        status: "processing",
+        progress: 25,
+        error: undefined,
+      });
+    }
+  }
+
   // Construct the S3 prefix using custom path if provided
   const s3Prefix = s3Path ? `${s3Path.replace(/^\/|\/$/g, "")}/${name}` : name;
 
@@ -213,6 +233,17 @@ export async function transcodeAndUpload(
   } catch (error) {
     console.error("Error during transcoding with FFmpeg:", error);
     throw new Error("Failed to transcode video with FFmpeg");
+  }
+
+  // Final check before S3 upload to ensure video wasn't completed by another process
+  if (uploadId) {
+    const currentRecord = getVideoRecord(uploadId);
+    if (currentRecord && currentRecord.status === "completed") {
+      console.log(
+        `✅ Video ${uploadId} was completed by another process, skipping S3 upload...`
+      );
+      return currentRecord.streamUrl || "";
+    }
   }
 
   // Update progress before starting S3 upload
