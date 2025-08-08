@@ -145,7 +145,7 @@ export async function transcodeAndUpload(
     // Generate thumbnail from the original video
     console.log("Generating thumbnail...");
     const thumbnailPath = path.join(outputDir, "thumbnail.jpg");
-    const thumbnailCmd = `ffmpeg -i "${localPath}" -ss 00:00:01.000 -vframes 1 -q:v 2 "${thumbnailPath}"`;
+    const thumbnailCmd = `ffmpeg -y -i "${localPath}" -ss 00:00:01.000 -vframes 1 -q:v 2 "${thumbnailPath}"`;
 
     console.log(`Executing thumbnail command: ${thumbnailCmd}`);
     execSync(thumbnailCmd, { stdio: "inherit" });
