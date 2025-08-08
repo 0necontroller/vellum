@@ -3,7 +3,6 @@ import { transcodeAndUpload } from "../controllers/utils/upload-utils";
 import { updateVideoRecord } from "../lib/videoStore";
 import { RabbitMQQueues } from "../lib/rabbitmq";
 import { ENV } from "../lib/environments";
-import { BUCKET_NAME } from "../lib/s3client";
 import axios from "axios";
 import fs from "fs/promises";
 import path from "path";
