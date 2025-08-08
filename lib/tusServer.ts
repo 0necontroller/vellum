@@ -27,10 +27,9 @@ export const createTusServer = () => {
         return {};
       }
 
-      // Update video record status to processing
+      // Update video record to indicate upload is complete (ready for processing)
       const updatedRecord = updateVideoRecord(uploadId!, {
-        status: "processing",
-        progress: 0,
+        progress: 0, // Reset progress for processing stage
       });
 
       if (!updatedRecord) {

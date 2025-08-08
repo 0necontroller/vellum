@@ -147,10 +147,28 @@ export const updateVideoRecord = (
 export const safelyTransitionToProcessing = (
   id: string
 ): { success: boolean; record?: VideoRecord } => {
+  // First get the current record to check its status
+  const currentRecord = getVideoRecord(id);
+
+  if (!currentRecord) {
+    return { success: false, record: undefined };
+  }
+
+  // If already completed, don't process again
+  if (currentRecord.status === "completed") {
+    return { success: false, record: currentRecord };
+  }
+
+  // If already processing but progress is still 0, allow it (might be stuck)
+  if (currentRecord.status === "processing" && currentRecord.progress > 10) {
+    return { success: false, record: currentRecord };
+  }
+
+  // Allow transition from uploading, failed, or processing with low progress
   const stmt = db.prepare(`
     UPDATE videos 
     SET status = 'processing', progress = 10
-    WHERE id = ? AND (status = 'uploading' OR status = 'failed')
+    WHERE id = ? AND (status = 'uploading' OR status = 'failed' OR (status = 'processing' AND progress <= 10))
   `);
 
   const result = stmt.run(id);

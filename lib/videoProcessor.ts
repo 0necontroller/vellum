@@ -65,7 +65,7 @@ export const startVideoProcessingWorker = async (channel: Channel) => {
         if (!transitionResult.success) {
           if (transitionResult.record?.status === "processing") {
             console.log(
-              `⚠️ Video ${job.uploadId} is already being processed by another worker, skipping...`
+              `⚠️ Video ${job.uploadId} is already being processed (progress: ${transitionResult.record.progress}%), skipping...`
             );
           } else if (transitionResult.record?.status === "completed") {
             console.log(
@@ -73,7 +73,7 @@ export const startVideoProcessingWorker = async (channel: Channel) => {
             );
           } else {
             console.log(
-              `⚠️ Video ${job.uploadId} cannot be transitioned to processing (current status: ${transitionResult.record?.status}), skipping...`
+              `⚠️ Video ${job.uploadId} cannot be transitioned to processing (current status: ${transitionResult.record?.status}, progress: ${transitionResult.record?.progress}%), skipping...`
             );
           }
           channel.ack(msg);
