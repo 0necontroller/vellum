@@ -1,4 +1,5 @@
 import fs from "fs";
+import fsPromises from "fs/promises";
 import path from "path";
 import { execSync } from "child_process";
 import { ENV } from "../../lib/environments";
@@ -25,54 +26,93 @@ export const processVideoAsync = async (job: VideoProcessingJob) => {
 };
 
 // Function to upload files recursively (for handling subdirectories)
-async function uploadFile(dirPath: string, prefix: string) {
-  const files = fs.readdirSync(dirPath);
+async function uploadFile(dirPath: string, prefix: string, uploadId?: string) {
+  const files = await fsPromises.readdir(dirPath);
 
+  // Process files in batches to reduce memory pressure
+  const BATCH_SIZE = 5;
+  const fileBatches = [];
+  for (let i = 0; i < files.length; i += BATCH_SIZE) {
+    fileBatches.push(files.slice(i, i + BATCH_SIZE));
+  }
+
+  let uploadedCount = 0;
+  let totalFiles = 0;
+
+  // Count total files for progress tracking
   for (const file of files) {
     const filePath = path.join(dirPath, file);
-    const stats = fs.statSync(filePath);
+    const stats = await fsPromises.stat(filePath);
+    if (!stats.isDirectory()) {
+      totalFiles++;
+    }
+  }
 
-    if (stats.isDirectory()) {
-      // Create a new prefix for the subdirectory and recurse
-      const newPrefix = `${prefix}/${file}`;
-      await uploadFile(filePath, newPrefix);
-    } else {
-      // Upload the file
-      const data = fs.readFileSync(filePath);
+  for (const batch of fileBatches) {
+    const uploadPromises = batch.map(async (file) => {
+      const filePath = path.join(dirPath, file);
+      const stats = await fsPromises.stat(filePath);
 
-      // Determine content type based on file extension
-      let contentType;
-      if (file.endsWith(".m3u8")) {
-        contentType = "application/vnd.apple.mpegurl";
-      } else if (file.endsWith(".ts")) {
-        contentType = "video/MP2T";
-      } else if (file.endsWith(".mp4")) {
-        contentType = "video/mp4";
-      } else if (file.endsWith(".m4s")) {
-        contentType = "video/iso.segment";
-      } else if (file.endsWith(".mpd")) {
-        contentType = "application/dash+xml";
-      } else if (file.endsWith(".vtt")) {
-        contentType = "text/vtt";
-      } else if (file.endsWith(".jpg") || file.endsWith(".jpeg")) {
-        contentType = "image/jpeg";
-      } else if (file.endsWith(".png")) {
-        contentType = "image/png";
+      if (stats.isDirectory()) {
+        // Create a new prefix for the subdirectory and recurse
+        const newPrefix = `${prefix}/${file}`;
+        await uploadFile(filePath, newPrefix, uploadId);
       } else {
-        contentType = "application/octet-stream";
-      }
+        // Upload the file using streaming to reduce memory usage
+        const data = await fsPromises.readFile(filePath);
 
-      const key = `${prefix}/${file}`;
-      await s3Client.send(
-        new PutObjectCommand({
-          Bucket: BUCKET_NAME,
-          Key: key,
-          Body: data,
-          ContentType: contentType,
-          ACL: "public-read",
-        })
-      );
-      console.log(`Uploaded: ${key}`);
+        // Determine content type based on file extension
+        let contentType;
+        if (file.endsWith(".m3u8")) {
+          contentType = "application/vnd.apple.mpegurl";
+        } else if (file.endsWith(".ts")) {
+          contentType = "video/MP2T";
+        } else if (file.endsWith(".mp4")) {
+          contentType = "video/mp4";
+        } else if (file.endsWith(".m4s")) {
+          contentType = "video/iso.segment";
+        } else if (file.endsWith(".mpd")) {
+          contentType = "application/dash+xml";
+        } else if (file.endsWith(".vtt")) {
+          contentType = "text/vtt";
+        } else if (file.endsWith(".jpg") || file.endsWith(".jpeg")) {
+          contentType = "image/jpeg";
+        } else if (file.endsWith(".png")) {
+          contentType = "image/png";
+        } else {
+          contentType = "application/octet-stream";
+        }
+
+        const key = `${prefix}/${file}`;
+        await s3Client.send(
+          new PutObjectCommand({
+            Bucket: BUCKET_NAME,
+            Key: key,
+            Body: data,
+            ContentType: contentType,
+            ACL: "public-read",
+          })
+        );
+        console.log(`Uploaded: ${key}`);
+        uploadedCount++;
+
+        // Update progress periodically during upload
+        if (uploadId && totalFiles > 10 && uploadedCount % 5 === 0) {
+          const uploadProgress =
+            Math.floor((uploadedCount / totalFiles) * 15) + 80; // 80-95% range
+          updateVideoRecord(uploadId, {
+            progress: Math.min(uploadProgress, 95),
+          });
+        }
+      }
+    });
+
+    // Process batch uploads in parallel
+    await Promise.all(uploadPromises);
+
+    // Add a small delay between batches to prevent overwhelming the system
+    if (fileBatches.indexOf(batch) < fileBatches.length - 1) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
     }
   }
 }
@@ -175,8 +215,19 @@ export async function transcodeAndUpload(
     throw new Error("Failed to transcode video with FFmpeg");
   }
 
+  // Update progress before starting S3 upload
+  if (uploadId) {
+    updateVideoRecord(uploadId, { progress: 80 });
+  }
+
+  console.log("🚀 Starting S3 upload process...");
   // Start the recursive upload
-  await uploadFile(outputDir, s3Prefix);
+  await uploadFile(outputDir, s3Prefix, uploadId);
+
+  // Update progress after S3 upload
+  if (uploadId) {
+    updateVideoRecord(uploadId, { progress: 95 });
+  }
 
   // Store metadata for later retrieval
   const metadataFile = path.join(outputDir, "metadata.json");

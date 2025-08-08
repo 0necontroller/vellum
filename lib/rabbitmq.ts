@@ -14,7 +14,16 @@ async function connectWithRetry(
   for (let i = 0; i < retries; i++) {
     try {
       const conn = await amqp.connect(
-        `amqp://${ENV.RABBITMQ_DEFAULT_USER}:${ENV.RABBITMQ_DEFAULT_PASS}@rabbitmq:5672`
+        `amqp://${ENV.RABBITMQ_DEFAULT_USER}:${ENV.RABBITMQ_DEFAULT_PASS}@rabbitmq:5672`,
+        {
+          // Increase heartbeat interval to 60 seconds for long-running processes
+          heartbeat: 60,
+          // Connection timeout settings
+          connectionTimeout: 30000,
+          authenticationTimeout: 30000,
+          // Keep connection alive during long operations
+          handshakeTimeout: 30000,
+        }
       );
       console.log("✅ Connected to RabbitMQ");
       return conn;
