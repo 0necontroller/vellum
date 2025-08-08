@@ -1,4 +1,3 @@
-import { v4 as uuidv4 } from "uuid";
 import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
@@ -9,6 +8,7 @@ export interface VideoRecord {
   status: "uploading" | "processing" | "completed" | "failed";
   progress: number;
   streamUrl?: string;
+  thumbnailUrl?: string;
   createdAt: Date;
   completedAt?: Date;
   error?: string;
@@ -37,6 +37,7 @@ db.exec(`
     status TEXT NOT NULL,
     progress INTEGER DEFAULT 0,
     streamUrl TEXT,
+    thumbnailUrl TEXT,
     createdAt TEXT NOT NULL,
     completedAt TEXT,
     error TEXT,
@@ -56,6 +57,13 @@ try {
   // Column already exists, ignore error
 }
 
+// Add thumbnailUrl column if it doesn't exist (for existing databases)
+try {
+  db.exec(`ALTER TABLE videos ADD COLUMN thumbnailUrl TEXT`);
+} catch (error) {
+  // Column already exists, ignore error
+}
+
 export const createVideoRecord = (data: Partial<VideoRecord>): VideoRecord => {
   const record: VideoRecord = {
     id: data.id as string,
@@ -70,9 +78,9 @@ export const createVideoRecord = (data: Partial<VideoRecord>): VideoRecord => {
 
   const stmt = db.prepare(`
     INSERT INTO videos (
-      id, filename, status, progress, streamUrl, createdAt, completedAt, 
+      id, filename, status, progress, streamUrl, thumbnailUrl, createdAt, completedAt, 
       error, packager, callbackUrl, callbackStatus, callbackRetryCount, callbackLastAttempt, s3Path
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   stmt.run(
@@ -81,6 +89,7 @@ export const createVideoRecord = (data: Partial<VideoRecord>): VideoRecord => {
     record.status,
     record.progress,
     record.streamUrl || null,
+    record.thumbnailUrl || null,
     record.createdAt.toISOString(),
     record.completedAt?.toISOString() || null,
     record.error || null,
@@ -109,7 +118,7 @@ export const updateVideoRecord = (
 
   const stmt = db.prepare(`
     UPDATE videos 
-    SET filename = ?, status = ?, progress = ?, streamUrl = ?, 
+    SET filename = ?, status = ?, progress = ?, streamUrl = ?, thumbnailUrl = ?, 
         completedAt = ?, error = ?, packager = ?, callbackUrl = ?,
         callbackStatus = ?, callbackRetryCount = ?, callbackLastAttempt = ?, s3Path = ?
     WHERE id = ?
@@ -120,6 +129,7 @@ export const updateVideoRecord = (
     updatedRecord.status,
     updatedRecord.progress,
     updatedRecord.streamUrl || null,
+    updatedRecord.thumbnailUrl || null,
     updatedRecord.completedAt?.toISOString() || null,
     updatedRecord.error || null,
     updatedRecord.packager || null,

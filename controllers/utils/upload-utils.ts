@@ -54,6 +54,10 @@ async function uploadFile(dirPath: string, prefix: string) {
         contentType = "application/dash+xml";
       } else if (file.endsWith(".vtt")) {
         contentType = "text/vtt";
+      } else if (file.endsWith(".jpg") || file.endsWith(".jpeg")) {
+        contentType = "image/jpeg";
+      } else if (file.endsWith(".png")) {
+        contentType = "image/png";
       } else {
         contentType = "application/octet-stream";
       }
@@ -135,6 +139,25 @@ export async function transcodeAndUpload(
 
     // Update progress if uploadId is provided
     if (uploadId) {
+      updateVideoRecord(uploadId, { progress: 60 });
+    }
+
+    // Generate thumbnail from the original video
+    console.log("Generating thumbnail...");
+    const thumbnailPath = path.join(outputDir, "thumbnail.jpg");
+    const thumbnailCmd = `ffmpeg -i "${localPath}" -ss 00:00:01.000 -vframes 1 -q:v 2 "${thumbnailPath}"`;
+
+    console.log(`Executing thumbnail command: ${thumbnailCmd}`);
+    execSync(thumbnailCmd, { stdio: "inherit" });
+
+    if (fs.existsSync(thumbnailPath)) {
+      console.log(`Thumbnail generated successfully: ${thumbnailPath}`);
+    } else {
+      console.warn("Thumbnail generation may have failed - file not found");
+    }
+
+    // Update progress if uploadId is provided
+    if (uploadId) {
       updateVideoRecord(uploadId, { progress: 75 });
     }
 
@@ -162,6 +185,7 @@ export async function transcodeAndUpload(
     packager: "ffmpeg",
     createdAt: new Date().toISOString(),
     source: path.basename(localPath),
+    hasThumbnail: fs.existsSync(path.join(outputDir, "thumbnail.jpg")),
   };
   fs.writeFileSync(metadataFile, JSON.stringify(metadata, null, 2));
 
@@ -176,7 +200,7 @@ export async function transcodeAndUpload(
     })
   );
 
-  return `${ENV.S3_ENDPOINT}/${BUCKET_NAME}/${s3Prefix}/index.m3u8`;
+  return `${BUCKET_NAME}.${ENV.S3_ENDPOINT}/${s3Prefix}/index.m3u8`;
 }
 
 // Interface for video information
@@ -202,7 +226,7 @@ export async function listVideos(): Promise<VideoInfo[]> {
     // Create a list of promises that fetch metadata for each video
     const videoInfoPromises = folders.map(async (folder) => {
       const videoInfo: VideoInfo = {
-        url: `${ENV.S3_ENDPOINT}/${BUCKET_NAME}/${folder}/index.m3u8`,
+        url: `${BUCKET_NAME}.${ENV.S3_ENDPOINT}/${folder}/index.m3u8`,
         name: folder,
       };
 

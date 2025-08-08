@@ -3,6 +3,7 @@ import { transcodeAndUpload } from "../controllers/utils/upload-utils";
 import { updateVideoRecord } from "../lib/videoStore";
 import { RabbitMQQueues } from "../lib/rabbitmq";
 import { ENV } from "../lib/environments";
+import { BUCKET_NAME } from "../lib/s3client";
 import axios from "axios";
 import fs from "fs/promises";
 import path from "path";
@@ -45,11 +46,18 @@ export const startVideoProcessingWorker = async (channel: Channel) => {
         job.s3Path
       );
 
+      // Generate thumbnail URL
+      const s3Prefix = job.s3Path
+        ? `${job.s3Path.replace(/^\/|\/$/g, "")}/${job.uploadId}`
+        : job.uploadId;
+      const thumbnailUrl = `${ENV.S3_BUCKET}.${ENV.S3_ENDPOINT}/${s3Prefix}/thumbnail.jpg`;
+
       // Update status to completed
       const updatedRecord = updateVideoRecord(job.uploadId, {
         status: "completed",
         progress: 100,
         streamUrl,
+        thumbnailUrl,
       });
 
       console.log(`✅ Video processing completed: ${job.filename}`);
@@ -65,6 +73,7 @@ export const startVideoProcessingWorker = async (channel: Channel) => {
             filename: job.filename,
             status: "completed",
             streamUrl,
+            thumbnailUrl,
           });
 
           if (response.status === 200) {
