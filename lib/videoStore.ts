@@ -144,6 +144,26 @@ export const updateVideoRecord = (
   return updatedRecord;
 };
 
+export const safelyTransitionToProcessing = (
+  id: string
+): { success: boolean; record?: VideoRecord } => {
+  const stmt = db.prepare(`
+    UPDATE videos 
+    SET status = 'processing', progress = 10
+    WHERE id = ? AND (status = 'uploading' OR status = 'failed')
+  `);
+
+  const result = stmt.run(id);
+
+  if (result.changes > 0) {
+    const record = getVideoRecord(id);
+    return { success: true, record };
+  } else {
+    const record = getVideoRecord(id);
+    return { success: false, record };
+  }
+};
+
 export const getVideoRecord = (id: string): VideoRecord | undefined => {
   const stmt = db.prepare("SELECT * FROM videos WHERE id = ?");
   const row = stmt.get(id) as any;
