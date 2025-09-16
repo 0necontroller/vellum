@@ -18,6 +18,7 @@ export interface VideoProcessingMessage {
   packager: "ffmpeg";
   callbackUrl?: string;
   s3Path?: string;
+  uploadToS3?: boolean;
 }
 
 export const startVideoProcessingWorker = async (channel: Channel) => {
@@ -109,7 +110,8 @@ export const startVideoProcessingWorker = async (channel: Channel) => {
           job.filePath,
           job.filename,
           job.uploadId,
-          job.s3Path
+          job.s3Path,
+          job.uploadToS3
         );
 
         // Clear heartbeat interval
@@ -140,13 +142,20 @@ export const startVideoProcessingWorker = async (channel: Channel) => {
         // Send webhook callback if provided
         if (job.callbackUrl && updatedRecord) {
           try {
-            const response = await axios.post(job.callbackUrl, {
+            const callbackPayload: any = {
               videoId: job.uploadId,
               filename: job.filename,
               status: "completed",
               streamUrl,
               thumbnailUrl,
-            });
+            };
+
+            // Include MP4 URL in callback if available
+            if (updatedRecord.mp4Url) {
+              callbackPayload.mp4Url = updatedRecord.mp4Url;
+            }
+
+            const response = await axios.post(job.callbackUrl, callbackPayload);
 
             if (response.status === 200) {
               // Update callback status to completed

@@ -19,6 +19,7 @@ export interface VideoProcessingJob {
   packager: "ffmpeg";
   callbackUrl?: string;
   s3Path?: string;
+  uploadToS3?: boolean;
 }
 
 export const processVideoAsync = async (job: VideoProcessingJob) => {
@@ -141,7 +142,8 @@ export async function transcodeAndUpload(
   localPath: string,
   filename: string,
   uploadId?: string,
-  s3Path?: string
+  s3Path?: string,
+  uploadToS3?: boolean
 ) {
   const name = uploadId || path.parse(filename).name;
 
@@ -233,6 +235,49 @@ export async function transcodeAndUpload(
   } catch (error) {
     console.error("Error during transcoding with FFmpeg:", error);
     throw new Error("Failed to transcode video with FFmpeg");
+  }
+
+  // Handle MP4 conversion and upload if uploadToS3 flag is enabled
+  let mp4Url: string | undefined;
+  if (uploadToS3) {
+    try {
+      console.log("🎬 Processing MP4 upload as requested...");
+
+      // Detect if the source video is already MP4
+      const videoFormat = await detectVideoFormat(localPath);
+      const isAlreadyMp4 =
+        videoFormat.includes("mp4") || videoFormat.includes("mov");
+
+      let mp4FilePath: string;
+
+      if (isAlreadyMp4) {
+        console.log(
+          "Source video is already in MP4-compatible format, using original file"
+        );
+        mp4FilePath = localPath;
+      } else {
+        console.log(
+          `Source video format: ${videoFormat}, converting to MP4...`
+        );
+        mp4FilePath = path.join(outputDir, "video.mp4");
+        await convertToMp4(localPath, mp4FilePath, uploadId);
+      }
+
+      // Upload MP4 to S3 in the same folder as HLS segments
+      const mp4S3Key = `${s3Prefix}/video.mp4`;
+      mp4Url = await uploadMp4ToS3(mp4FilePath, mp4S3Key, uploadId);
+
+      // Update video record with MP4 URL
+      if (uploadId) {
+        updateVideoRecord(uploadId, { mp4Url });
+      }
+
+      console.log(`✅ MP4 processing completed: ${mp4Url}`);
+    } catch (error) {
+      console.error("❌ MP4 processing failed:", error);
+      // Don't throw error here - continue with HLS processing even if MP4 fails
+      console.log("Continuing with HLS processing despite MP4 failure...");
+    }
   }
 
   // Final check before S3 upload to ensure video wasn't completed by another process
@@ -350,5 +395,95 @@ export async function listVideos(): Promise<VideoInfo[]> {
   } catch (error) {
     console.error("Error listing videos:", error);
     throw new Error("Failed to list videos");
+  }
+}
+
+/**
+ * Detects the format of a video file using FFprobe
+ * @param filePath - Path to the video file
+ * @returns The container format (e.g., 'mov,mp4,m4a,3gp,3g2,mj2' for MP4)
+ */
+async function detectVideoFormat(filePath: string): Promise<string> {
+  try {
+    const cmd = `ffprobe -v quiet -show_format -select_streams v:0 -print_format json "${filePath}"`;
+    const output = execSync(cmd, { encoding: "utf8" });
+    const data = JSON.parse(output);
+    return data.format?.format_name || "";
+  } catch (error) {
+    console.error("Error detecting video format:", error);
+    throw new Error("Failed to detect video format");
+  }
+}
+
+/**
+ * Converts a video file to MP4 format using FFmpeg
+ * @param inputPath - Input video file path
+ * @param outputPath - Output MP4 file path
+ * @param uploadId - Upload ID for progress tracking
+ */
+async function convertToMp4(
+  inputPath: string,
+  outputPath: string,
+  uploadId?: string
+): Promise<void> {
+  try {
+    console.log(`Converting video to MP4: ${inputPath} -> ${outputPath}`);
+
+    // Use FFmpeg with optimized settings for web playback
+    const cmd = `ffmpeg -i "${inputPath}" -c:v libx264 -preset medium -crf 23 -c:a aac -b:a 128k -movflags +faststart -y "${outputPath}"`;
+
+    console.log(`Executing MP4 conversion command: ${cmd}`);
+    execSync(cmd, { stdio: "inherit" });
+
+    console.log("MP4 conversion completed successfully");
+
+    // Update progress if uploadId is provided
+    if (uploadId) {
+      updateVideoRecord(uploadId, { progress: 70 });
+    }
+  } catch (error) {
+    console.error("Error converting video to MP4:", error);
+    throw new Error("Failed to convert video to MP4");
+  }
+}
+
+/**
+ * Uploads an MP4 file to S3
+ * @param filePath - Local path to the MP4 file
+ * @param s3Key - S3 key (path) for the uploaded file
+ * @param uploadId - Upload ID for progress tracking
+ * @returns The S3 URL of the uploaded file
+ */
+async function uploadMp4ToS3(
+  filePath: string,
+  s3Key: string,
+  uploadId?: string
+): Promise<string> {
+  try {
+    console.log(`Uploading MP4 to S3: ${filePath} -> ${s3Key}`);
+
+    const data = await fsPromises.readFile(filePath);
+
+    await s3Client.send(
+      new PutObjectCommand({
+        Bucket: BUCKET_NAME,
+        Key: s3Key,
+        Body: data,
+        ContentType: "video/mp4",
+        ACL: "public-read",
+      })
+    );
+
+    console.log(`MP4 uploaded to S3 successfully: ${s3Key}`);
+
+    // Update progress if uploadId is provided
+    if (uploadId) {
+      updateVideoRecord(uploadId, { progress: 85 });
+    }
+
+    return `${BUCKET_NAME}.${ENV.S3_ENDPOINT}/${s3Key}`;
+  } catch (error) {
+    console.error("Error uploading MP4 to S3:", error);
+    throw new Error("Failed to upload MP4 to S3");
   }
 }
