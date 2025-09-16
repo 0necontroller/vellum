@@ -47,6 +47,11 @@ import { validateUpload, formatValidationErrors } from "../lib/validation";
  *           type: string
  *           description: Optional custom S3 path for storing the video (e.g., "/v2/media")
  *           example: "/v2/media"
+ *         uploadToS3:
+ *           type: boolean
+ *           default: false
+ *           description: Whether to upload an MP4 version of the video to S3 alongside HLS segments
+ *           example: true
  *     VideoUploadSessionResponse:
  *       type: object
  *       properties:
@@ -66,6 +71,10 @@ import { validateUpload, formatValidationErrors } from "../lib/validation";
  *           type: number
  *           description: Upload session expiration time in seconds
  *           example: 3600
+ *         mp4Url:
+ *           type: string
+ *           description: Future MP4 URL where the processed video will be available (only included if uploadToS3 is true)
+ *           example: "http://localhost:9000/video-streams/550e8400-e29b-41d4-a716-446655440000/video.mp4"
  *     VideoStatus:
  *       type: object
  *       properties:
@@ -106,6 +115,14 @@ import { validateUpload, formatValidationErrors } from "../lib/validation";
  *           type: string
  *           description: Custom S3 path where the video is stored
  *           example: "/v2/media"
+ *         uploadToS3:
+ *           type: boolean
+ *           description: Whether MP4 upload to S3 was requested
+ *           example: true
+ *         mp4Url:
+ *           type: string
+ *           description: S3 URL of the MP4 file (available when completed and uploadToS3 was true)
+ *           example: "http://localhost:9000/video-streams/550e8400-e29b-41d4-a716-446655440000/video.mp4"
  */
 
 /**
@@ -113,7 +130,7 @@ import { validateUpload, formatValidationErrors } from "../lib/validation";
  * /api/v1/video/create:
  *   post:
  *     summary: Create a video upload session
- *     description: Creates a TUS upload session and returns a presigned URL for direct frontend uploads
+ *     description: Creates a TUS upload session and returns a presigned URL for direct frontend uploads. Optionally converts and uploads MP4 version to S3.
  *     tags: [Video]
  *     security:
  *       - BearerAuth: []
@@ -152,6 +169,19 @@ import { validateUpload, formatValidationErrors } from "../lib/validation";
  *                       example: error
  *                     message:
  *                       example: File size (150MB) exceeds maximum allowed size (100MB)
+ *       422:
+ *         description: Validation error for uploadToS3 parameter
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/ServerResponse'
+ *                 - type: object
+ *                   properties:
+ *                     status:
+ *                       example: error
+ *                     message:
+ *                       example: uploadToS3 must be a boolean
  *       401:
  *         description: Unauthorized - Invalid or missing Bearer token
  *         content:
@@ -177,6 +207,7 @@ export const createVideoUpload = async (
       packager = "ffmpeg",
       callbackUrl,
       s3Path,
+      uploadToS3 = false,
     } = req.body;
 
     if (!filename || !filesize) {
@@ -209,6 +240,16 @@ export const createVideoUpload = async (
       return;
     }
 
+    // Validate uploadToS3 parameter if provided
+    if (uploadToS3 !== undefined && typeof uploadToS3 !== "boolean") {
+      res.status(400).json({
+        status: "error",
+        message: "uploadToS3 must be a boolean",
+        data: null,
+      });
+      return;
+    }
+
     // Clean up s3Path - remove leading/trailing slashes and ensure it's a valid path
     let cleanS3Path = s3Path;
     if (cleanS3Path) {
@@ -234,6 +275,7 @@ export const createVideoUpload = async (
       packager,
       callbackUrl,
       s3Path: cleanS3Path,
+      uploadToS3,
     });
 
     // Construct the video URL using the same logic as in transcodeAndUpload
@@ -242,15 +284,26 @@ export const createVideoUpload = async (
       : uploadId;
     const videoUrl = `${BUCKET_NAME}.${ENV.S3_ENDPOINT}/${s3Prefix}/index.m3u8`;
 
+    // Construct MP4 URL if uploadToS3 is enabled
+    const mp4Url = uploadToS3
+      ? `${BUCKET_NAME}.${ENV.S3_ENDPOINT}/${s3Prefix}/video.mp4`
+      : undefined;
+
+    const responseData: any = {
+      uploadId,
+      uploadUrl,
+      videoUrl,
+      expiresIn: 3600,
+    };
+
+    if (uploadToS3) {
+      responseData.mp4Url = mp4Url;
+    }
+
     res.json({
       status: "success",
       message: "Upload session created",
-      data: {
-        uploadId,
-        uploadUrl,
-        videoUrl,
-        expiresIn: 3600,
-      },
+      data: responseData,
     });
   } catch (error) {
     console.error("Error creating video upload session:", error);

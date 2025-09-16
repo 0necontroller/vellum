@@ -19,6 +19,7 @@ export interface VideoProcessingJob {
   packager: "ffmpeg";
   callbackUrl?: string;
   s3Path?: string;
+  uploadToS3?: boolean;
 }
 
 export const processVideoAsync = async (job: VideoProcessingJob) => {
@@ -141,7 +142,8 @@ export async function transcodeAndUpload(
   localPath: string,
   filename: string,
   uploadId?: string,
-  s3Path?: string
+  s3Path?: string,
+  uploadToS3?: boolean
 ) {
   const name = uploadId || path.parse(filename).name;
 
@@ -172,30 +174,88 @@ export async function transcodeAndUpload(
   const outputDir = path.resolve(process.cwd(), "controllers", "videos", name);
   fs.mkdirSync(outputDir, { recursive: true });
 
+  // Declare codecInfo variable for use throughout the function
+  let codecInfo: VideoCodecInfo;
+
   // Update progress if uploadId is provided
   if (uploadId) {
     updateVideoRecord(uploadId, { progress: 25 });
   }
 
-  // Use FFmpeg for transcoding
-  const cmd = `ffmpeg -i "${localPath}" \
-    -profile:v baseline -level 3.0 -start_number 0 \
-    -hls_time 3 -hls_list_size 0 -f hls "${outputDir}/index.m3u8"`;
+  // Probe video codecs to determine optimal transcoding strategy
+  console.log("🔍 Analyzing video codecs for optimization...");
+  try {
+    codecInfo = await probeVideoCodecs(localPath);
+    console.log(`📊 Codec Analysis:
+      - Video: ${codecInfo.videoCodec} ${
+      codecInfo.videoProfile ? `(${codecInfo.videoProfile})` : ""
+    }
+      - Audio: ${codecInfo.audioCodec}
+      - Container: ${codecInfo.containerFormat}
+      - HLS Compatible: ${codecInfo.isHlsCompatible ? "✅" : "❌"}
+      - Strategy: ${codecInfo.recommendedStrategy.toUpperCase()}`);
+  } catch (error) {
+    console.warn(
+      "⚠️ Failed to probe codecs, falling back to re-encode:",
+      error
+    );
+    codecInfo = {
+      videoCodec: "unknown",
+      audioCodec: "unknown",
+      containerFormat: "unknown",
+      isHlsCompatible: false,
+      recommendedStrategy: "reencode",
+    };
+  }
 
-  console.log("Using FFmpeg to transcode video");
+  // Build optimized FFmpeg command based on codec analysis
+  const outputPath = path.join(outputDir, "index.m3u8");
+  const cmd = buildOptimizedFFmpegCommand(
+    codecInfo.recommendedStrategy,
+    localPath,
+    outputPath
+  );
+
+  // Estimate processing time for logging
+  let fileSize = 0;
+  try {
+    const stats = await fsPromises.stat(localPath);
+    fileSize = stats.size;
+  } catch (error) {
+    console.warn("Could not get file size for time estimation");
+  }
+
+  const estimatedTime = estimateProcessingTime(
+    codecInfo.recommendedStrategy,
+    fileSize
+  );
+
+  console.log(
+    `🚀 Starting ${codecInfo.recommendedStrategy.toUpperCase()} transcoding (estimated: ${Math.round(
+      estimatedTime
+    )}s)...`
+  );
 
   try {
-    console.log("Starting transcoding with FFmpeg...");
     console.log(`Input file: ${localPath}`);
     console.log(`Output directory: ${outputDir}`);
-
-    // Log the command for debugging purposes
     console.log(`Executing command: ${cmd}`);
 
-    // Execute the command with stdio inheritance to see progress
+    const startTime = Date.now();
     execSync(cmd, { stdio: "inherit" });
+    const actualTime = (Date.now() - startTime) / 1000;
 
-    console.log("Transcoding complete with FFmpeg");
+    const speedupFactor =
+      codecInfo.recommendedStrategy === "reencode"
+        ? 1
+        : Math.round((estimatedTime * 2) / actualTime);
+    console.log(
+      `✅ ${codecInfo.recommendedStrategy.toUpperCase()} transcoding completed in ${Math.round(
+        actualTime
+      )}s ${
+        speedupFactor > 1 ? `(~${speedupFactor}x faster than re-encoding)` : ""
+      }`
+    );
 
     // Update progress if uploadId is provided
     if (uploadId) {
@@ -231,8 +291,84 @@ export async function transcodeAndUpload(
     console.log("Generated files:");
     listFiles(outputDir);
   } catch (error) {
-    console.error("Error during transcoding with FFmpeg:", error);
-    throw new Error("Failed to transcode video with FFmpeg");
+    console.error(
+      `❌ Error during ${
+        codecInfo?.recommendedStrategy || "unknown"
+      } transcoding:`,
+      error
+    );
+
+    // If stream copy failed, try fallback to re-encoding
+    if (
+      codecInfo?.recommendedStrategy === "copy" ||
+      codecInfo?.recommendedStrategy === "selective"
+    ) {
+      console.log(
+        "🔄 Stream copy failed, attempting fallback to re-encoding..."
+      );
+      try {
+        const fallbackCmd = buildOptimizedFFmpegCommand(
+          "reencode",
+          localPath,
+          outputPath
+        );
+        console.log(`Executing fallback command: ${fallbackCmd}`);
+        execSync(fallbackCmd, { stdio: "inherit" });
+        console.log("✅ Fallback re-encoding completed successfully");
+      } catch (fallbackError) {
+        console.error("❌ Fallback re-encoding also failed:", fallbackError);
+        throw new Error(
+          "Failed to transcode video with both stream copy and re-encoding"
+        );
+      }
+    } else {
+      throw new Error(
+        `Failed to transcode video with ${
+          codecInfo?.recommendedStrategy || "FFmpeg"
+        }`
+      );
+    }
+  }
+
+  // Handle MP4 conversion and upload if uploadToS3 flag is enabled
+  let mp4Url: string | undefined;
+  if (uploadToS3) {
+    try {
+      console.log("🎬 Processing MP4 upload as requested...");
+
+      // Use the codec info we already gathered for HLS processing
+      let mp4FilePath: string;
+
+      if (codecInfo && codecInfo.containerFormat.includes("mp4")) {
+        console.log(
+          "Source video is already in MP4 container format, using original file"
+        );
+        mp4FilePath = localPath;
+      } else {
+        console.log(
+          `Source container: ${
+            codecInfo?.containerFormat || "unknown"
+          }, converting to MP4...`
+        );
+        mp4FilePath = path.join(outputDir, "video.mp4");
+        await convertToMp4(localPath, mp4FilePath, uploadId);
+      }
+
+      // Upload MP4 to S3 in the same folder as HLS segments
+      const mp4S3Key = `${s3Prefix}/video.mp4`;
+      mp4Url = await uploadMp4ToS3(mp4FilePath, mp4S3Key, uploadId);
+
+      // Update video record with MP4 URL
+      if (uploadId) {
+        updateVideoRecord(uploadId, { mp4Url });
+      }
+
+      console.log(`✅ MP4 processing completed: ${mp4Url}`);
+    } catch (error) {
+      console.error("❌ MP4 processing failed:", error);
+      // Don't throw error here - continue with HLS processing even if MP4 fails
+      console.log("Continuing with HLS processing despite MP4 failure...");
+    }
   }
 
   // Final check before S3 upload to ensure video wasn't completed by another process
@@ -246,9 +382,12 @@ export async function transcodeAndUpload(
     }
   }
 
-  // Update progress before starting S3 upload
+  // Update progress before starting S3 upload (adjust based on transcoding strategy)
   if (uploadId) {
-    updateVideoRecord(uploadId, { progress: 80 });
+    // For stream copy, we can move to a higher progress faster since transcoding was quick
+    const progressAfterTranscoding =
+      codecInfo.recommendedStrategy === "copy" ? 85 : 80;
+    updateVideoRecord(uploadId, { progress: progressAfterTranscoding });
   }
 
   console.log("🚀 Starting S3 upload process...");
@@ -268,6 +407,13 @@ export async function transcodeAndUpload(
     createdAt: new Date().toISOString(),
     source: path.basename(localPath),
     hasThumbnail: fs.existsSync(path.join(outputDir, "thumbnail.jpg")),
+    transcodingStrategy: codecInfo?.recommendedStrategy || "reencode",
+    sourceCodecs: {
+      video: codecInfo?.videoCodec || "unknown",
+      audio: codecInfo?.audioCodec || "unknown",
+      profile: codecInfo?.videoProfile || "unknown",
+    },
+    hlsCompatible: codecInfo?.isHlsCompatible || false,
   };
   fs.writeFileSync(metadataFile, JSON.stringify(metadata, null, 2));
 
@@ -350,5 +496,272 @@ export async function listVideos(): Promise<VideoInfo[]> {
   } catch (error) {
     console.error("Error listing videos:", error);
     throw new Error("Failed to list videos");
+  }
+}
+
+/**
+ * Detects the format of a video file using FFprobe
+ * @param filePath - Path to the video file
+ * @returns The container format (e.g., 'mov,mp4,m4a,3gp,3g2,mj2' for MP4)
+ */
+async function detectVideoFormat(filePath: string): Promise<string> {
+  try {
+    const cmd = `ffprobe -v quiet -show_format -select_streams v:0 -print_format json "${filePath}"`;
+    const output = execSync(cmd, { encoding: "utf8" });
+    const data = JSON.parse(output);
+    return data.format?.format_name || "";
+  } catch (error) {
+    console.error("Error detecting video format:", error);
+    throw new Error("Failed to detect video format");
+  }
+}
+
+/**
+ * Interface for video codec information
+ */
+interface VideoCodecInfo {
+  videoCodec: string;
+  audioCodec: string;
+  videoProfile?: string;
+  videoLevel?: string;
+  containerFormat: string;
+  isHlsCompatible: boolean;
+  recommendedStrategy: "copy" | "selective" | "reencode";
+}
+
+/**
+ * Probes video file to get detailed codec information
+ * @param filePath - Path to the video file
+ * @returns Detailed codec information and HLS compatibility
+ */
+async function probeVideoCodecs(filePath: string): Promise<VideoCodecInfo> {
+  try {
+    const cmd = `ffprobe -v quiet -show_streams -show_format -print_format json "${filePath}"`;
+    const output = execSync(cmd, { encoding: "utf8" });
+    const data = JSON.parse(output);
+
+    let videoCodec = "";
+    let audioCodec = "";
+    let videoProfile = "";
+    let videoLevel = "";
+
+    // Find video and audio streams
+    const videoStream = data.streams?.find(
+      (stream: any) => stream.codec_type === "video"
+    );
+    const audioStream = data.streams?.find(
+      (stream: any) => stream.codec_type === "audio"
+    );
+
+    if (videoStream) {
+      videoCodec = videoStream.codec_name || "";
+      videoProfile = videoStream.profile || "";
+      videoLevel = videoStream.level || "";
+    }
+
+    if (audioStream) {
+      audioCodec = audioStream.codec_name || "";
+    }
+
+    const containerFormat = data.format?.format_name || "";
+
+    // Determine HLS compatibility and strategy
+    const isHlsCompatible = isCompatibleWithHls(
+      videoCodec,
+      audioCodec,
+      videoProfile
+    );
+    const recommendedStrategy = determineTranscodingStrategy(
+      videoCodec,
+      audioCodec,
+      videoProfile
+    );
+
+    return {
+      videoCodec,
+      audioCodec,
+      videoProfile,
+      videoLevel,
+      containerFormat,
+      isHlsCompatible,
+      recommendedStrategy,
+    };
+  } catch (error) {
+    console.error("Error probing video codecs:", error);
+    throw new Error("Failed to probe video codecs");
+  }
+}
+
+/**
+ * Determines if video/audio codecs are compatible with HLS
+ */
+function isCompatibleWithHls(
+  videoCodec: string,
+  audioCodec: string,
+  videoProfile?: string
+): boolean {
+  // H.264 video codec check
+  const isVideoCompatible =
+    videoCodec === "h264" &&
+    (!videoProfile ||
+      ["baseline", "main", "high", "constrained baseline"].includes(
+        videoProfile.toLowerCase()
+      ));
+
+  // AAC audio codec check
+  const isAudioCompatible = audioCodec === "aac";
+
+  return isVideoCompatible && isAudioCompatible;
+}
+
+/**
+ * Determines the best transcoding strategy based on codec compatibility
+ */
+function determineTranscodingStrategy(
+  videoCodec: string,
+  audioCodec: string,
+  videoProfile?: string
+): "copy" | "selective" | "reencode" {
+  const isVideoH264Compatible =
+    videoCodec === "h264" &&
+    (!videoProfile ||
+      ["baseline", "main", "high", "constrained baseline"].includes(
+        videoProfile.toLowerCase()
+      ));
+
+  const isAudioAacCompatible = audioCodec === "aac";
+
+  if (isVideoH264Compatible && isAudioAacCompatible) {
+    return "copy"; // Full stream copy
+  } else if (isVideoH264Compatible && !isAudioAacCompatible) {
+    return "selective"; // Copy video, re-encode audio
+  } else {
+    return "reencode"; // Re-encode both video and audio
+  }
+}
+
+/**
+ * Builds optimized FFmpeg command based on transcoding strategy
+ * @param strategy - Transcoding strategy ('copy', 'selective', or 'reencode')
+ * @param inputPath - Input video file path
+ * @param outputPath - Output HLS playlist path
+ * @returns FFmpeg command string
+ */
+function buildOptimizedFFmpegCommand(
+  strategy: "copy" | "selective" | "reencode",
+  inputPath: string,
+  outputPath: string
+): string {
+  const baseParams = "-start_number 0 -hls_time 3 -hls_list_size 0 -f hls";
+
+  switch (strategy) {
+    case "copy":
+      // Full stream copy - fastest option
+      return `ffmpeg -i "${inputPath}" -c copy ${baseParams} "${outputPath}"`;
+
+    case "selective":
+      // Copy video, re-encode audio to AAC
+      return `ffmpeg -i "${inputPath}" -c:v copy -c:a aac -b:a 128k ${baseParams} "${outputPath}"`;
+
+    case "reencode":
+    default:
+      // Full re-encode with optimized settings
+      return `ffmpeg -i "${inputPath}" -c:v libx264 -preset medium -crf 23 -c:a aac -b:a 128k ${baseParams} "${outputPath}"`;
+  }
+}
+
+/**
+ * Estimates processing time based on strategy and file size
+ * @param strategy - Transcoding strategy
+ * @param fileSizeBytes - File size in bytes
+ * @returns Estimated processing time in seconds
+ */
+function estimateProcessingTime(
+  strategy: "copy" | "selective" | "reencode",
+  fileSizeBytes: number
+): number {
+  const fileSizeMB = fileSizeBytes / (1024 * 1024);
+
+  switch (strategy) {
+    case "copy":
+      return Math.max(2, fileSizeMB * 0.1); // ~0.1 seconds per MB
+    case "selective":
+      return Math.max(5, fileSizeMB * 0.3); // ~0.3 seconds per MB
+    case "reencode":
+    default:
+      return Math.max(10, fileSizeMB * 2); // ~2 seconds per MB
+  }
+}
+
+/**
+ * Converts a video file to MP4 format using FFmpeg
+ * @param inputPath - Input video file path
+ * @param outputPath - Output MP4 file path
+ * @param uploadId - Upload ID for progress tracking
+ */
+async function convertToMp4(
+  inputPath: string,
+  outputPath: string,
+  uploadId?: string
+): Promise<void> {
+  try {
+    console.log(`Converting video to MP4: ${inputPath} -> ${outputPath}`);
+
+    // Use FFmpeg with optimized settings for web playback
+    const cmd = `ffmpeg -i "${inputPath}" -c:v libx264 -preset medium -crf 23 -c:a aac -b:a 128k -movflags +faststart -y "${outputPath}"`;
+
+    console.log(`Executing MP4 conversion command: ${cmd}`);
+    execSync(cmd, { stdio: "inherit" });
+
+    console.log("MP4 conversion completed successfully");
+
+    // Update progress if uploadId is provided
+    if (uploadId) {
+      updateVideoRecord(uploadId, { progress: 70 });
+    }
+  } catch (error) {
+    console.error("Error converting video to MP4:", error);
+    throw new Error("Failed to convert video to MP4");
+  }
+}
+
+/**
+ * Uploads an MP4 file to S3
+ * @param filePath - Local path to the MP4 file
+ * @param s3Key - S3 key (path) for the uploaded file
+ * @param uploadId - Upload ID for progress tracking
+ * @returns The S3 URL of the uploaded file
+ */
+async function uploadMp4ToS3(
+  filePath: string,
+  s3Key: string,
+  uploadId?: string
+): Promise<string> {
+  try {
+    console.log(`Uploading MP4 to S3: ${filePath} -> ${s3Key}`);
+
+    const data = await fsPromises.readFile(filePath);
+
+    await s3Client.send(
+      new PutObjectCommand({
+        Bucket: BUCKET_NAME,
+        Key: s3Key,
+        Body: data,
+        ContentType: "video/mp4",
+        ACL: "public-read",
+      })
+    );
+
+    console.log(`MP4 uploaded to S3 successfully: ${s3Key}`);
+
+    // Update progress if uploadId is provided
+    if (uploadId) {
+      updateVideoRecord(uploadId, { progress: 85 });
+    }
+
+    return `${BUCKET_NAME}.${ENV.S3_ENDPOINT}/${s3Key}`;
+  } catch (error) {
+    console.error("Error uploading MP4 to S3:", error);
+    throw new Error("Failed to upload MP4 to S3");
   }
 }

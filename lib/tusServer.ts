@@ -45,6 +45,7 @@ export const createTusServer = () => {
         packager: "ffmpeg",
         callbackUrl: videoRecord.callbackUrl,
         s3Path: videoRecord.s3Path,
+        uploadToS3: videoRecord.uploadToS3,
       });
 
       console.log(`✅ Video queued for processing: ${uploadId}`);
